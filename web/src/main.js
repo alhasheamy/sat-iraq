@@ -32,13 +32,14 @@ const log = (m) => { $('#log').textContent = m; };
 // ---------- الخريطة ----------
 const baseTpl = res?.base?.eox?.template ?? 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg';
 const map = new maplibregl.Map({
-  container: 'map', style: { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [] }, center: [dv.lon, dv.lat], zoom: dv.zoom,
+  container: 'map', hash: 'v', style: { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [] }, center: [dv.lon, dv.lat], zoom: dv.zoom,
   minZoom: 2, maxZoom: 19, dragRotate: false, attributionControl: false,
   maxBounds: [[-28, -18], [68, 44]],
 });
 map.touchZoomRotate.disableRotation();
 maplibregl.setRTLTextPlugin(location.origin + '/rtl.js', true);
 map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), 'bottom-right');
+map.addControl(new maplibregl.FullscreenControl({ container: document.body }), 'bottom-right');
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
@@ -133,7 +134,8 @@ const d = summary?.iraqDust;
 if (d) { $('#dust').textContent = `الغبار: ${LV[d.level] ?? d.level}${d.city ? ' · ' + d.city : ''}`; $('#dust').className = 'chip ' + d.level; } else $('#dust').remove();
 
 // ---------- الطقس ----------
-function renderWx(title, cur, day, text) {
+let pop;
+function renderWx(title, cur, day, text, at) {
   const [em, desc] = WMO(cur.weather_code ?? 0);
   const r = (v) => (typeof v === 'number' ? Math.round(v) : '–');
   const days = (day?.time ?? []).slice(0, 7).map((t, i) => h('div', {}, h('b', {}, new Intl.DateTimeFormat('ar', { weekday: 'short', timeZone: 'UTC' }).format(new Date(t + 'T00:00:00Z'))), WMO(day.code[i])[0], h('br'), `${r(day.tmax[i])}°`, h('br'), h('b', {}, `${r(day.tmin[i])}°`)));
@@ -141,11 +143,16 @@ function renderWx(title, cur, day, text) {
     h('div', { class: 'now' }, h('span', { class: 'e' }, em), h('span', { class: 't' }, `${r(cur.temperature_2m)}°`),
       h('span', { class: 'hint' }, `${desc}\nمحسوسة ${r(cur.apparent_temperature)}° · رطوبة ${r(cur.relative_humidity_2m)}%\nرياح ${r(cur.wind_speed_10m)} م/ث`)),
     text ? h('div', { class: 'hint' }, text) : null, h('div', { class: 'days' }, days));
-  document.body.classList.add('open');
+  if (at) {
+    pop?.remove();
+    pop = new maplibregl.Popup({ offset: 14, closeButton: true, maxWidth: '220px' }).setLngLat(at)
+      .setDOMContent(h('div', { class: 'pop' }, h('b', {}, title), h('div', { class: 'pt' }, em + ' ' + r(cur.temperature_2m) + '° · ' + desc),
+        h('button', { onclick: () => { sheet(true); pop.remove(); } }, 'التفاصيل والأسبوع'))).addTo(map);
+  }
 }
 function showCity(c) {
   const w = wx?.cities?.find((x) => x.id === c.id);
-  if (w?.current) return renderWx(c.ar, w.current, w.daily, summary?.cities?.[c.id]?.text);
+  if (w?.current) return renderWx(c.ar, w.current, w.daily, summary?.cities?.[c.id]?.text, [c.lon, c.lat]);
   showPoint(c.lat, c.lon, c.ar);
 }
 const cache = new Map();
@@ -162,7 +169,7 @@ async function showPoint(lat, lon, title = 'الموقع المحدد') {
       cache.set(key, hit);
     } catch { $('#wx').replaceChildren(h('h3', {}, 'الطقس'), h('div', { class: 'hint warn' }, 'تعذّر جلب الطقس لهذه النقطة الآن.')); return; }
   }
-  renderWx(title, hit.cur, hit.day);
+  renderWx(title, hit.cur, hit.day, null, [lon, lat]);
 }
 const mobile = () => innerWidth <= 760;
 const sheet = (on) => document.body.classList.toggle('open', on);
