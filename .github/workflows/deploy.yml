@@ -1,0 +1,127 @@
+name: update-and-deploy
+
+# يعمل: كل 3 ساعات تلقائيًا، وعند أي رفع إلى main، ويدويًا من تبويب Actions.
+on:
+  schedule:
+    - cron: '7 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'أعد جلب الطقس حتى لو كانت البيانات طازجة'
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/keepalive.txt'
+
+concurrency:
+  group: update-and-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # لخطوة الإبقاء على الجدولة حيّة
+  actions: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CF_PROJECT_NAME: ${{ vars.CF_PROJECT_NAME }}
+      KV_ID: ${{ vars.KV_ID }}
+      SITE_URL: ${{ vars.SITE_URL }}
+      FORCE: ${{ inputs.force && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: فحص الأسرار
+        env:
+          T: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          A: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$T" ] || [ -z "$A" ]; then
+            echo "::error::السرّان CLOUDFLARE_API_TOKEN و CLOUDFLARE_ACCOUNT_ID غير مضبوطين. راجع docs/DEPLOY-WINDOWS.md الخطوة 11."
+            exit 1
+          fi
+
+      - name: تحديد اسم المشروع ورابط الموقع
+        run: |
+          if [ -z "$CF_PROJECT_NAME" ]; then
+            CF_PROJECT_NAME="$(echo "${GITHUB_REPOSITORY_OWNER}-sat-iraq" | tr 'A-Z_' 'a-z-' | cut -c1-58)"
+          fi
+          echo "CF_PROJECT_NAME=$CF_PROJECT_NAME" >> "$GITHUB_ENV"
+          if [ -z "$SITE_URL" ]; then SITE_URL="https://${CF_PROJECT_NAME}.pages.dev"; fi
+          echo "SITE_URL=$SITE_URL" >> "$GITHUB_ENV"
+          echo "اسم المشروع: $CF_PROJECT_NAME"
+
+      - run: npm ci
+
+      - name: اختبارات (عند الرفع فقط)
+        if: github.event_name == 'push'
+        run: npm test
+
+      - name: التحقق من طبقات الصور (GIBS)
+        run: npm run verify-layers
+
+      - name: جلب الطقس والغبار (Open-Meteo)
+        run: npm run weather
+
+      - name: بناء الواجهة (إن وُجد web/package.json)
+        run: |
+          if [ -f web/package.json ]; then
+            npm --prefix web ci
+            npm --prefix web run build
+          else
+            echo "لا توجد واجهة Vite؛ تُستخدم web/static"
+          fi
+
+      - name: تجميع الموقع
+        run: npm run build
+
+      - name: توليد wrangler.toml
+        run: node scripts/prepare-wrangler.mjs
+
+      - name: إنشاء مشروع Pages (يُتجاهل الخطأ إن كان موجودًا)
+        uses: cloudflare/wrangler-action@v3
+        continue-on-error: true
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create ${{ env.CF_PROJECT_NAME }} --production-branch=main
+
+      - name: النشر على Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ env.CF_PROJECT_NAME }} --branch=main --commit-dirty=true
+
+      - name: فحص سريع للموقع المنشور
+        continue-on-error: true
+        run: |
+          sleep 20
+          curl -fsS --retry 5 --retry-delay 8 "$SITE_URL/data/meta.json" | head -c 300; echo
+          echo "### الموقع: $SITE_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: إبقاء الجدولة حيّة (GitHub يوقفها بعد 60 يومًا بلا نشاط)
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/enable" || true
+          if { [ "$(date -u +%d)" = "01" ] || [ "$(date -u +%d)" = "15" ]; } && [ "$(date -u +%H)" -lt 3 ]; then
+            date -u +%F > .github/keepalive.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/keepalive.txt
+            git commit -m "chore: keepalive" || true
+            git push || true
+          fi
