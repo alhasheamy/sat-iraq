@@ -26,14 +26,14 @@ const placeIdx = buildPlaceIndex(cities);
 const layers = (res?.layers ?? []).filter((l) => l.status !== 'unavailable');
 const imagery = layers.filter((l) => l.kind === 'imagery');
 const overlays = layers.filter((l) => l.kind === 'overlay' && !/vector/i.test(l.format || ''));
-const S = { layer: imagery[0]?.id, date: { mode: 'latest' }, ov: new Set(), saver: true };
+const S = { layer: imagery[0]?.id, date: { mode: 'latest' }, ov: new Set(), saver: false };
 const log = (m) => { $('#log').textContent = m; };
 
 // ---------- الخريطة ----------
 const baseTpl = res?.base?.eox?.template ?? 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg';
 const map = new maplibregl.Map({
   container: 'map', style: { version: 8, sources: {}, layers: [] }, center: [dv.lon, dv.lat], zoom: dv.zoom,
-  minZoom: 3, maxZoom: 14, dragRotate: false, attributionControl: false,
+  minZoom: 3, maxZoom: 17, dragRotate: false, attributionControl: false,
   maxBounds: [[bbox.west - 6, bbox.south - 6], [bbox.east + 6, bbox.north + 6]],
 });
 map.touchZoomRotate.disableRotation();
@@ -55,7 +55,7 @@ function applyMap() {
   for (const o of overlays) raster('ov-' + o.id, S.ov.has(o.id) ? o : null, 0.75);
 }
 map.on('load', () => {
-  map.addSource('base', { type: 'raster', tiles: [baseTpl], tileSize: 256, maxzoom: 12 });
+  map.addSource('base', { type: 'raster', tiles: [baseTpl], tileSize: 256, maxzoom: 13 });
   map.addLayer({ id: 'base', type: 'raster', source: 'base' });
   applyMap();
 });
@@ -63,6 +63,13 @@ map.on('zoom', () => document.body.classList.toggle('far', map.getZoom() < 6.5))
 map.on('error', (e) => { if (e?.error?.status === 404) return; });
 
 // ---------- الواجهة ----------
+const S2 = '__s2';
+function hint() {
+  const l = imagery.find((x) => x.id === S.layer);
+  const z = map.getZoom(), native = l ? maxz(l) : 13;
+  $('#zhint').textContent = z > native + 0.6 ? (l ? `تجاوزت أقصى دقة لهذه الطبقة (${l.resolution_m} م) فتبدو الصورة مكبّرة. لتفاصيل أدق اختر «HLS 30 م» أو «Sentinel-2 10 م».` : 'تجاوزت أقصى دقة للخلفية (≈10 م)؛ الصورة مكبّرة.') : '';
+}
+map.on('zoomend', hint);
 function refreshUI() {
   const l = imagery.find((x) => x.id === S.layer);
   $('#layer').value = S.layer ?? '';
@@ -70,13 +77,14 @@ function refreshUI() {
   $('#date').max = today;
   $('#saver').checked = S.saver;
   document.querySelectorAll('#overlays input').forEach((i) => (i.checked = S.ov.has(i.dataset.id)));
-  $('#linfo').textContent = l ? [l.resolution_m && `دقة ${l.resolution_m} م`, l.latency && `التأخر: ${l.latency}`, l.status === 'no_recent_tile' && '⚠ لا بلاطة حديثة',
+  hint();
+  $('#linfo').textContent = S.layer === S2 ? 'خلفية Sentinel-2 بلا غيوم، دقة 10 م (مركّب سنوي، وليست صورة اليوم).' : l ? [l.resolution_m && `دقة ${l.resolution_m} م`, l.latency && `التأخر: ${l.latency}`, l.status === 'no_recent_tile' && '⚠ لا بلاطة حديثة',
     l.patchy && 'صور 30 م ليست متاحة كل يوم لكل مكان؛ جرّب تاريخًا آخر.'].filter(Boolean).join(' · ') : 'لا توجد طبقات متاحة حاليًا.';
 }
 const sync = () => { refreshUI(); applyMap(); };
 const setDate = (d) => { S.date = d; sync(); };
 
-$('#layer').append(...imagery.map((l) => h('option', { value: l.id }, l.title_ar + (l.status === 'no_recent_tile' ? ' ⚠' : ''))));
+$('#layer').append(h('option', { value: S2 }, 'Sentinel-2 بلا غيوم (10 م · سنوي)'), ...imagery.map((l) => h('option', { value: l.id }, l.title_ar + (l.status === 'no_recent_tile' ? ' ⚠' : ''))));
 $('#layer').onchange = (e) => { S.layer = e.target.value; sync(); };
 $('#date').onchange = (e) => e.target.value && e.target.value <= today && setDate({ mode: 'date', date: e.target.value });
 $('#prev').onclick = () => setDate({ mode: 'date', date: addDays($('#date').value || today, -1) });
