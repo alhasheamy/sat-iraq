@@ -74,6 +74,9 @@ jobs:
       - name: جلب الطقس والغبار (Open-Meteo)
         run: npm run weather
 
+      - name: جلب إصدارات Wayback (أرشيف Esri)
+        run: npm run wayback
+
       - name: بناء الواجهة (إن وُجد web/package.json)
         run: |
           if [ -f web/package.json ]; then
