@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>أقمار العراق | صور الأقمار الصناعية والطقس</title>
+<meta name="description" content="صور أقمار صناعية يومية حديثة للعراق والشرق الأوسط، مع الطقس والغبار ومساعد ذكي. مجاني وغير ربحي.">
+<meta name="theme-color" content="#0b1b2b">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%230b1b2b'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2338bdf8'/%3E%3C/svg%3E">
+<script type="module" src="/src/main.js"></script>
+</head>
+<body>
+<div id="map"></div>
+<header id="bar">
+  <button id="menu" aria-label="القائمة">☰</button>
+  <b class="brand">أقمار العراق</b>
+  <span id="dust" class="chip"></span>
+</header>
+<aside id="side">
+  <section>
+    <label>الطبقة<select id="layer"></select></label>
+    <div id="linfo" class="hint"></div>
+    <div class="row">
+      <button id="prev" title="اليوم السابق">›</button>
+      <input id="date" type="date" aria-label="التاريخ">
+      <button id="next" title="اليوم التالي">‹</button>
+      <button id="latest">الأحدث</button>
+    </div>
+  </section>
+  <section>
+    <h3>طبقات إضافية</h3>
+    <div id="overlays"></div>
+    <label class="chk"><input id="saver" type="checkbox"> توفير البيانات</label>
+  </section>
+  <section>
+    <h3>المساعد</h3>
+    <form id="ask" class="row"><input id="q" maxlength="200" placeholder="مثال: أرني البصرة، الغبار، أمس" autocomplete="off"><button>إرسال</button></form>
+    <div id="log" class="hint" role="status"></div>
+  </section>
+  <section id="wx"><h3>الطقس</h3><div class="hint">انقر على مدينة أو أي نقطة في الخريطة.</div></section>
+  <section>
+    <h3>المدن</h3>
+    <div id="cities"></div>
+    <div id="presets" class="row wrap"></div>
+  </section>
+  <footer>
+    <div id="fresh"></div>
+    <p>صور: <a href="https://earthdata.nasa.gov/gibs" rel="noopener">NASA GIBS/ESDIS</a> · NASA HLS · بيانات <a href="https://www.copernicus.eu" rel="noopener">Copernicus</a> Sentinel · <span id="eox"></span></p>
+    <p>بيانات الطقس من <a href="https://open-meteo.com" rel="noopener">Open-Meteo.com</a> (CC BY 4.0) · <a href="https://earthquake.usgs.gov" rel="noopener">USGS</a></p>
+    <p>الموقع مجاني وغير ربحي.</p>
+  </footer>
+</aside>
+<noscript>يحتاج هذا الموقع إلى تفعيل جافاسكربت.</noscript>
+</body>
+</html>

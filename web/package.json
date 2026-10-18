@@ -1,0 +1,9 @@
+{
+  "name": "sat-iraq-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "build": "vite build", "dev": "vite" },
+  "dependencies": { "maplibre-gl": "4.7.1" },
+  "devDependencies": { "vite": "5.4.11" }
+}
