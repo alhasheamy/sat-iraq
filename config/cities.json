@@ -1,0 +1,581 @@
+{
+ "version": 1,
+ "cities": [
+  {
+   "id": "baghdad",
+   "ar": "بغداد",
+   "en": "Baghdad",
+   "country": "IQ",
+   "lat": 33.3152,
+   "lon": 44.3661,
+   "iraqGov": true
+  },
+  {
+   "id": "basra",
+   "ar": "البصرة",
+   "en": "Basra",
+   "country": "IQ",
+   "lat": 30.5085,
+   "lon": 47.7804,
+   "iraqGov": true
+  },
+  {
+   "id": "mosul",
+   "ar": "الموصل",
+   "en": "Mosul",
+   "country": "IQ",
+   "lat": 36.335,
+   "lon": 43.1189,
+   "iraqGov": true
+  },
+  {
+   "id": "erbil",
+   "ar": "أربيل",
+   "en": "Erbil",
+   "country": "IQ",
+   "lat": 36.1912,
+   "lon": 44.0092,
+   "iraqGov": true
+  },
+  {
+   "id": "sulaymaniyah",
+   "ar": "السليمانية",
+   "en": "Sulaymaniyah",
+   "country": "IQ",
+   "lat": 35.5558,
+   "lon": 45.4351,
+   "iraqGov": true
+  },
+  {
+   "id": "duhok",
+   "ar": "دهوك",
+   "en": "Duhok",
+   "country": "IQ",
+   "lat": 36.8679,
+   "lon": 42.9884,
+   "iraqGov": true
+  },
+  {
+   "id": "kirkuk",
+   "ar": "كركوك",
+   "en": "Kirkuk",
+   "country": "IQ",
+   "lat": 35.4681,
+   "lon": 44.3922,
+   "iraqGov": true
+  },
+  {
+   "id": "ramadi",
+   "ar": "الرمادي",
+   "en": "Ramadi",
+   "country": "IQ",
+   "lat": 33.4258,
+   "lon": 43.2999,
+   "iraqGov": true
+  },
+  {
+   "id": "fallujah",
+   "ar": "الفلوجة",
+   "en": "Fallujah",
+   "country": "IQ",
+   "lat": 33.35,
+   "lon": 43.7833,
+   "iraqGov": false
+  },
+  {
+   "id": "karbala",
+   "ar": "كربلاء",
+   "en": "Karbala",
+   "country": "IQ",
+   "lat": 32.616,
+   "lon": 44.0249,
+   "iraqGov": true
+  },
+  {
+   "id": "najaf",
+   "ar": "النجف",
+   "en": "Najaf",
+   "country": "IQ",
+   "lat": 32,
+   "lon": 44.3362,
+   "iraqGov": true
+  },
+  {
+   "id": "hillah",
+   "ar": "الحلة",
+   "en": "Hillah",
+   "country": "IQ",
+   "lat": 32.4637,
+   "lon": 44.4196,
+   "iraqGov": true
+  },
+  {
+   "id": "diwaniyah",
+   "ar": "الديوانية",
+   "en": "Diwaniyah",
+   "country": "IQ",
+   "lat": 31.9889,
+   "lon": 44.9259,
+   "iraqGov": true
+  },
+  {
+   "id": "samawah",
+   "ar": "السماوة",
+   "en": "Samawah",
+   "country": "IQ",
+   "lat": 31.3092,
+   "lon": 45.28,
+   "iraqGov": true
+  },
+  {
+   "id": "nasiriyah",
+   "ar": "الناصرية",
+   "en": "Nasiriyah",
+   "country": "IQ",
+   "lat": 31.0439,
+   "lon": 46.2573,
+   "iraqGov": true
+  },
+  {
+   "id": "amarah",
+   "ar": "العمارة",
+   "en": "Amarah",
+   "country": "IQ",
+   "lat": 31.8356,
+   "lon": 47.144,
+   "iraqGov": true
+  },
+  {
+   "id": "kut",
+   "ar": "الكوت",
+   "en": "Kut",
+   "country": "IQ",
+   "lat": 32.5128,
+   "lon": 45.8182,
+   "iraqGov": true
+  },
+  {
+   "id": "baqubah",
+   "ar": "بعقوبة",
+   "en": "Baqubah",
+   "country": "IQ",
+   "lat": 33.7467,
+   "lon": 44.6436,
+   "iraqGov": true
+  },
+  {
+   "id": "tikrit",
+   "ar": "تكريت",
+   "en": "Tikrit",
+   "country": "IQ",
+   "lat": 34.6071,
+   "lon": 43.6782,
+   "iraqGov": true
+  },
+  {
+   "id": "halabja",
+   "ar": "حلبجة",
+   "en": "Halabja",
+   "country": "IQ",
+   "lat": 35.1778,
+   "lon": 45.9861,
+   "iraqGov": true
+  },
+  {
+   "id": "qaim",
+   "ar": "القائم",
+   "en": "Al-Qaim",
+   "country": "IQ",
+   "lat": 34.3833,
+   "lon": 41.0167,
+   "iraqGov": false
+  },
+  {
+   "id": "rutba",
+   "ar": "الرطبة",
+   "en": "Rutba",
+   "country": "IQ",
+   "lat": 33.0333,
+   "lon": 40.2833,
+   "iraqGov": false
+  },
+  {
+   "id": "faw",
+   "ar": "الفاو",
+   "en": "Al-Faw",
+   "country": "IQ",
+   "lat": 29.9753,
+   "lon": 48.4731,
+   "iraqGov": false
+  },
+  {
+   "id": "riyadh",
+   "ar": "الرياض",
+   "en": "Riyadh",
+   "country": "SA",
+   "lat": 24.7136,
+   "lon": 46.6753,
+   "iraqGov": false
+  },
+  {
+   "id": "jeddah",
+   "ar": "جدة",
+   "en": "Jeddah",
+   "country": "SA",
+   "lat": 21.4858,
+   "lon": 39.1925,
+   "iraqGov": false
+  },
+  {
+   "id": "mecca",
+   "ar": "مكة المكرمة",
+   "en": "Mecca",
+   "country": "SA",
+   "lat": 21.3891,
+   "lon": 39.8579,
+   "iraqGov": false
+  },
+  {
+   "id": "medina",
+   "ar": "المدينة المنورة",
+   "en": "Medina",
+   "country": "SA",
+   "lat": 24.5247,
+   "lon": 39.5692,
+   "iraqGov": false
+  },
+  {
+   "id": "dammam",
+   "ar": "الدمام",
+   "en": "Dammam",
+   "country": "SA",
+   "lat": 26.4207,
+   "lon": 50.0888,
+   "iraqGov": false
+  },
+  {
+   "id": "tabuk",
+   "ar": "تبوك",
+   "en": "Tabuk",
+   "country": "SA",
+   "lat": 28.3838,
+   "lon": 36.555,
+   "iraqGov": false
+  },
+  {
+   "id": "abha",
+   "ar": "أبها",
+   "en": "Abha",
+   "country": "SA",
+   "lat": 18.2164,
+   "lon": 42.5053,
+   "iraqGov": false
+  },
+  {
+   "id": "kuwait-city",
+   "ar": "مدينة الكويت",
+   "en": "Kuwait City",
+   "country": "KW",
+   "lat": 29.3759,
+   "lon": 47.9774,
+   "iraqGov": false
+  },
+  {
+   "id": "doha",
+   "ar": "الدوحة",
+   "en": "Doha",
+   "country": "QA",
+   "lat": 25.2854,
+   "lon": 51.531,
+   "iraqGov": false
+  },
+  {
+   "id": "manama",
+   "ar": "المنامة",
+   "en": "Manama",
+   "country": "BH",
+   "lat": 26.2285,
+   "lon": 50.586,
+   "iraqGov": false
+  },
+  {
+   "id": "abu-dhabi",
+   "ar": "أبوظبي",
+   "en": "Abu Dhabi",
+   "country": "AE",
+   "lat": 24.4539,
+   "lon": 54.3773,
+   "iraqGov": false
+  },
+  {
+   "id": "dubai",
+   "ar": "دبي",
+   "en": "Dubai",
+   "country": "AE",
+   "lat": 25.2048,
+   "lon": 55.2708,
+   "iraqGov": false
+  },
+  {
+   "id": "muscat",
+   "ar": "مسقط",
+   "en": "Muscat",
+   "country": "OM",
+   "lat": 23.588,
+   "lon": 58.3829,
+   "iraqGov": false
+  },
+  {
+   "id": "salalah",
+   "ar": "صلالة",
+   "en": "Salalah",
+   "country": "OM",
+   "lat": 17.0151,
+   "lon": 54.0924,
+   "iraqGov": false
+  },
+  {
+   "id": "sanaa",
+   "ar": "صنعاء",
+   "en": "Sanaa",
+   "country": "YE",
+   "lat": 15.3694,
+   "lon": 44.191,
+   "iraqGov": false
+  },
+  {
+   "id": "aden",
+   "ar": "عدن",
+   "en": "Aden",
+   "country": "YE",
+   "lat": 12.7855,
+   "lon": 45.0187,
+   "iraqGov": false
+  },
+  {
+   "id": "amman",
+   "ar": "عمّان",
+   "en": "Amman",
+   "country": "JO",
+   "lat": 31.9454,
+   "lon": 35.9284,
+   "iraqGov": false
+  },
+  {
+   "id": "aqaba",
+   "ar": "العقبة",
+   "en": "Aqaba",
+   "country": "JO",
+   "lat": 29.5321,
+   "lon": 35.0063,
+   "iraqGov": false
+  },
+  {
+   "id": "damascus",
+   "ar": "دمشق",
+   "en": "Damascus",
+   "country": "SY",
+   "lat": 33.5138,
+   "lon": 36.2765,
+   "iraqGov": false
+  },
+  {
+   "id": "aleppo",
+   "ar": "حلب",
+   "en": "Aleppo",
+   "country": "SY",
+   "lat": 36.2021,
+   "lon": 37.1343,
+   "iraqGov": false
+  },
+  {
+   "id": "latakia",
+   "ar": "اللاذقية",
+   "en": "Latakia",
+   "country": "SY",
+   "lat": 35.5317,
+   "lon": 35.79,
+   "iraqGov": false
+  },
+  {
+   "id": "beirut",
+   "ar": "بيروت",
+   "en": "Beirut",
+   "country": "LB",
+   "lat": 33.8938,
+   "lon": 35.5018,
+   "iraqGov": false
+  },
+  {
+   "id": "cairo",
+   "ar": "القاهرة",
+   "en": "Cairo",
+   "country": "EG",
+   "lat": 30.0444,
+   "lon": 31.2357,
+   "iraqGov": false
+  },
+  {
+   "id": "alexandria",
+   "ar": "الإسكندرية",
+   "en": "Alexandria",
+   "country": "EG",
+   "lat": 31.2001,
+   "lon": 29.9187,
+   "iraqGov": false
+  },
+  {
+   "id": "suez",
+   "ar": "السويس",
+   "en": "Suez",
+   "country": "EG",
+   "lat": 29.9668,
+   "lon": 32.5498,
+   "iraqGov": false
+  },
+  {
+   "id": "sharm",
+   "ar": "شرم الشيخ",
+   "en": "Sharm El-Sheikh",
+   "country": "EG",
+   "lat": 27.9158,
+   "lon": 34.33,
+   "iraqGov": false
+  },
+  {
+   "id": "aswan",
+   "ar": "أسوان",
+   "en": "Aswan",
+   "country": "EG",
+   "lat": 24.0889,
+   "lon": 32.8998,
+   "iraqGov": false
+  },
+  {
+   "id": "tehran",
+   "ar": "طهران",
+   "en": "Tehran",
+   "country": "IR",
+   "lat": 35.6892,
+   "lon": 51.389,
+   "iraqGov": false
+  },
+  {
+   "id": "tabriz",
+   "ar": "تبريز",
+   "en": "Tabriz",
+   "country": "IR",
+   "lat": 38.0962,
+   "lon": 46.2738,
+   "iraqGov": false
+  },
+  {
+   "id": "isfahan",
+   "ar": "أصفهان",
+   "en": "Isfahan",
+   "country": "IR",
+   "lat": 32.6546,
+   "lon": 51.668,
+   "iraqGov": false
+  },
+  {
+   "id": "shiraz",
+   "ar": "شيراز",
+   "en": "Shiraz",
+   "country": "IR",
+   "lat": 29.5918,
+   "lon": 52.5837,
+   "iraqGov": false
+  },
+  {
+   "id": "mashhad",
+   "ar": "مشهد",
+   "en": "Mashhad",
+   "country": "IR",
+   "lat": 36.2605,
+   "lon": 59.6168,
+   "iraqGov": false
+  },
+  {
+   "id": "ahvaz",
+   "ar": "الأهواز",
+   "en": "Ahvaz",
+   "country": "IR",
+   "lat": 31.3183,
+   "lon": 48.6706,
+   "iraqGov": false
+  },
+  {
+   "id": "kermanshah",
+   "ar": "كرمانشاه",
+   "en": "Kermanshah",
+   "country": "IR",
+   "lat": 34.3277,
+   "lon": 47.0778,
+   "iraqGov": false
+  },
+  {
+   "id": "bandar-abbas",
+   "ar": "بندر عباس",
+   "en": "Bandar Abbas",
+   "country": "IR",
+   "lat": 27.1865,
+   "lon": 56.2808,
+   "iraqGov": false
+  },
+  {
+   "id": "ankara",
+   "ar": "أنقرة",
+   "en": "Ankara",
+   "country": "TR",
+   "lat": 39.9334,
+   "lon": 32.8597,
+   "iraqGov": false
+  },
+  {
+   "id": "istanbul",
+   "ar": "إسطنبول",
+   "en": "Istanbul",
+   "country": "TR",
+   "lat": 41.0082,
+   "lon": 28.9784,
+   "iraqGov": false
+  },
+  {
+   "id": "adana",
+   "ar": "أضنة",
+   "en": "Adana",
+   "country": "TR",
+   "lat": 37,
+   "lon": 35.3213,
+   "iraqGov": false
+  },
+  {
+   "id": "gaziantep",
+   "ar": "غازي عنتاب",
+   "en": "Gaziantep",
+   "country": "TR",
+   "lat": 37.0662,
+   "lon": 37.3833,
+   "iraqGov": false
+  },
+  {
+   "id": "diyarbakir",
+   "ar": "ديار بكر",
+   "en": "Diyarbakir",
+   "country": "TR",
+   "lat": 37.9144,
+   "lon": 40.2306,
+   "iraqGov": false
+  },
+  {
+   "id": "van",
+   "ar": "وان",
+   "en": "Van",
+   "country": "TR",
+   "lat": 38.4891,
+   "lon": 43.4089,
+   "iraqGov": false
+  }
+ ]
+}

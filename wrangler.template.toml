@@ -1,0 +1,16 @@
+# قالب إعدادات Cloudflare Pages. لا تعدّل wrangler.toml (يُولَّد أثناء النشر من هذا القالب
+# بواسطة scripts/prepare-wrangler.mjs).
+name = "__PROJECT_NAME__"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "./dist"
+
+# ربط Workers AI (الحصة المجانية 10,000 Neuron يوميًا)
+[ai]
+binding = "AI"
+
+# __KV_BLOCK_START__
+# ربط KV لعدّادات سقف المساعد. يُحذف هذا المقطع تلقائيًا إن لم يُضبط المتغير KV_ID.
+[[kv_namespaces]]
+binding = "LIMITS_KV"
+id = "__KV_ID__"
+# __KV_BLOCK_END__

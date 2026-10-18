@@ -1,0 +1,24 @@
+{
+ "version": 1,
+ "models": [
+  {
+   "id": "@cf/openai/gpt-oss-20b",
+   "style": "responses",
+   "estNeurons": 29
+  },
+  {
+   "id": "@cf/qwen/qwen3-30b-a3b-fp8",
+   "style": "chat",
+   "estNeurons": 15
+  }
+ ],
+ "caps": {
+  "globalPerDay": 200,
+  "perUserPerDay": 15,
+  "maxTextChars": 200,
+  "maxActions": 4,
+  "maxOutputTokens": 700
+ },
+ "note": "style=responses يعني واجهة Responses (instructions/input). إن فشل في الاختبار الحي تجرّب الدالة الأسلوب الآخر تلقائيًا.",
+ "costNote": "gpt-oss-20b: 18,182 Neuron لكل مليون رمز دخل و27,273 لكل مليون رمز خرج (يشمل رموز الاستدلال). ≈29 Neuron للطلب النموذجي، وأسوأ حالة لمحاولة واحدة ≈41."
+}

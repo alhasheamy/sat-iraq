@@ -1,0 +1,19 @@
+{
+  "name": "sat-iraq",
+  "version": "1.0.0",
+  "private": true,
+  "description": "منصة مجانية لصور الأقمار الصناعية والطقس للعراق والشرق الأوسط (Cloudflare Pages + GitHub Actions)",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\"",
+    "verify-layers": "node scripts/verify-layers.mjs",
+    "weather": "node scripts/fetch-weather.mjs",
+    "build": "node scripts/assemble.mjs",
+    "data": "npm run verify-layers && npm run weather",
+    "all": "npm run data && npm run build"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0"
+  }
+}

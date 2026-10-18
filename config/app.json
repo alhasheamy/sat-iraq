@@ -1,0 +1,35 @@
+{
+ "version": 1,
+ "bbox": {
+  "west": 24,
+  "south": 12,
+  "east": 64,
+  "north": 42
+ },
+ "iraqBounds": {
+  "west": 38.8,
+  "south": 29,
+  "east": 48.6,
+  "north": 37.4
+ },
+ "defaultView": {
+  "lat": 33,
+  "lon": 43.7,
+  "zoom": 5.6
+ },
+ "grid": {
+  "step": 2,
+  "forecastHours": 72,
+  "stepHours": 3
+ },
+ "dust": {
+  "highUgm3": 100,
+  "severeUgm3": 300
+ },
+ "staleWarnHours": 9,
+ "refresh": {
+  "gridMaxAgeHours": 5.5,
+  "airMaxAgeHours": 5.5,
+  "citiesMaxAgeHours": 2.5
+ }
+}

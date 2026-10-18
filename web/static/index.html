@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>حالة منصة صور الأقمار الصناعية</title>
+<link rel="stylesheet" href="status.css">
+</head>
+<body>
+<main>
+  <h1>منصة صور الأقمار الصناعية والطقس — صفحة الحالة</h1>
+  <p class="note">هذه صفحة مؤقتة تثبت أن الاستضافة وخط البيانات يعملان. تُستبدل بالواجهة الكاملة (الخريطة) عند بنائها في المجلد <code>web/</code>.</p>
+
+  <section><h2>البيانات</h2><div id="data" class="grid">جارٍ التحميل…</div></section>
+  <section><h2>غبار العراق (تنبؤ 24 ساعة)</h2><div id="dust">جارٍ التحميل…</div></section>
+  <section><h2>طبقات الصور</h2><div class="scroll"><table id="layers"><thead><tr><th>الطبقة</th><th>الدقة</th><th>الحالة</th><th>أحدث تاريخ</th></tr></thead><tbody></tbody></table></div></section>
+  <section>
+    <h2>المساعد الذكي</h2>
+    <div id="ai">جارٍ الفحص…</div>
+    <form id="aiForm"><input id="aiText" maxlength="200" placeholder="مثال: أرني الغبار فوق البصرة" autocomplete="off"><button type="submit">أرسل</button></form>
+    <pre id="aiOut" hidden></pre>
+  </section>
+
+  <footer>
+    <p>بيانات الطقس من <a href="https://open-meteo.com/">Open-Meteo.com</a> (CC BY 4.0) · صور NASA GIBS/ESDIS وNASA HLS · بيانات Copernicus Sentinel · خلفية EOxCloudless · زلازل USGS.</p>
+    <p>الموقع مجاني بالكامل، بلا إعلانات ولا أرباح.</p>
+  </footer>
+</main>
+<script src="status.js"></script>
+</body>
+</html>
