@@ -40,7 +40,9 @@ map.touchZoomRotate.disableRotation();
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-const dateFor = (l) => (S.date.mode === 'latest' ? l.latestDate || today : S.date.date);
+// صور JPEG اليومية بلا شفافية: يوم اليوم غير مكتمل التغطية فيظهر أسود، لذا «الأحدث» = اليوم السابق لها
+const latestOf = (l) => { const d = l.latestDate || today; return l.kind === 'imagery' && /jpe?g/i.test(l.format || '') ? addDays(d, -1) : d; };
+const dateFor = (l) => (S.date.mode === 'latest' ? latestOf(l) : S.date.date);
 const maxz = (l) => { const m = l.maxZoom ?? 9; return S.saver && l.dataSaverMaxZoom ? Math.min(m, l.dataSaverMaxZoom) : m; };
 function raster(id, l, opacity) {
   if (map.getLayer(id)) map.removeLayer(id);
@@ -73,12 +75,13 @@ map.on('zoomend', hint);
 function refreshUI() {
   const l = imagery.find((x) => x.id === S.layer);
   $('#layer').value = S.layer ?? '';
-  $('#date').value = S.date.mode === 'latest' ? (l?.latestDate ?? today) : S.date.date;
+  $('#date').value = S.date.mode === 'latest' ? (l ? latestOf(l) : today) : S.date.date;
   $('#date').max = today;
   $('#saver').checked = S.saver;
   document.querySelectorAll('#overlays input').forEach((i) => (i.checked = S.ov.has(i.dataset.id)));
   hint();
   $('#linfo').textContent = S.layer === S2 ? 'خلفية Sentinel-2 بلا غيوم، دقة 10 م (مركّب سنوي، وليست صورة اليوم).' : l ? [l.resolution_m && `دقة ${l.resolution_m} م`, l.latency && `التأخر: ${l.latency}`, l.status === 'no_recent_tile' && '⚠ لا بلاطة حديثة',
+    /jpe?g/i.test(l.format || '') && S.date.mode === 'latest' && 'الأحدث = أمس لاكتمال التغطية (صورة اليوم تظهر ناقصة)',
     l.patchy && 'صور 30 م ليست متاحة كل يوم لكل مكان؛ جرّب تاريخًا آخر.'].filter(Boolean).join(' · ') : 'لا توجد طبقات متاحة حاليًا.';
 }
 const sync = () => { refreshUI(); applyMap(); };
