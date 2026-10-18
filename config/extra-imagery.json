@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "notes": "أضف هنا صور الدرون أو الصور الأرشيفية بصيغة بلاطات XYZ/TMS. بعد الإضافة ضع نطاق الخادم في img-src وconnect-src داخل deploy/_headers. التفاصيل في docs/EXTRA-IMAGERY.md",
+  "sources": []
+}

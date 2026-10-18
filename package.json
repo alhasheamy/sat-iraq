@@ -9,8 +9,9 @@
     "test": "node --test \"tests/*.test.js\"",
     "verify-layers": "node scripts/verify-layers.mjs",
     "weather": "node scripts/fetch-weather.mjs",
+    "wayback": "node scripts/fetch-wayback.mjs",
     "build": "node scripts/assemble.mjs",
-    "data": "npm run verify-layers && npm run weather",
+    "data": "npm run verify-layers && npm run weather && npm run wayback",
     "all": "npm run data && npm run build"
   },
   "dependencies": {

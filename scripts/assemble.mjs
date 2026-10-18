@@ -21,7 +21,7 @@ if (fs.existsSync(GEN)) cp(GEN, path.join(dist, 'data'));
 else console.warn('تحذير: لا توجد بيانات مولّدة (.generated/data). شغّل: npm run data');
 
 fs.mkdirSync(path.join(dist, 'data', 'config'), { recursive: true });
-for (const f of ['cities', 'presets', 'app']) cp(path.join(ROOT, 'config', `${f}.json`), path.join(dist, 'data', 'config', `${f}.json`));
+for (const f of ['cities', 'presets', 'app', 'extra-imagery']) cp(path.join(ROOT, 'config', `${f}.json`), path.join(dist, 'data', 'config', `${f}.json`));
 
 cp(path.join(ROOT, 'deploy', '_headers'), path.join(dist, '_headers'));
 cp(path.join(ROOT, 'deploy', '_routes.json'), path.join(dist, '_routes.json'));

@@ -4,34 +4,73 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>أقمار العراق | صور الأقمار الصناعية والطقس</title>
-<meta name="description" content="صور أقمار صناعية يومية حديثة للعراق والشرق الأوسط، مع الطقس والغبار ومساعد ذكي. مجاني وغير ربحي.">
+<meta name="description" content="خريطة أقمار صناعية عالية الدقة للعراق مع بحث بالأسماء ومقارنة بين التواريخ والطقس والغبار ومساعد ذكي. مجاني وغير ربحي.">
 <meta name="theme-color" content="#0b1b2b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:title" content="أقمار العراق">
+<meta property="og:description" content="صور أقمار صناعية عالية الدقة والطقس والغبار للعراق.">
+<meta property="og:image" content="/icons/icon-512.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%230b1b2b'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%2338bdf8'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<style>
+#splash{position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0b1b2b;color:#e8f0f8;font:600 18px system-ui,Tahoma,sans-serif;transition:opacity .5s}
+#splash.off{opacity:0;pointer-events:none}
+#splash i{width:64px;height:64px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#7dd3fc,#0a7ac2 60%,#082f49);box-shadow:0 0 0 0 #38bdf855;animation:pulse 1.6s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 26px #38bdf800}100%{box-shadow:0 0 0 0 #38bdf800}}
+@media (prefers-reduced-motion:reduce){#splash i{animation:none}}
+</style>
 <script type="module" src="/src/main.js"></script>
 </head>
 <body>
+<div id="splash" role="status"><i></i><span>أقمار العراق</span></div>
 <div id="map"></div>
+<div id="map2"></div>
+<div id="cmp" hidden role="slider" tabindex="0" aria-label="شريط المقارنة" aria-valuemin="0" aria-valuemax="100"><span>⇆</span></div>
+<div id="cmplab" hidden><b id="la"></b><b id="lb"></b></div>
+<canvas id="windcv"></canvas>
+<div id="load" aria-hidden="true"></div>
+<div id="hud" title="انقر لنسخ رابط هذا الموقع" role="button" tabindex="0"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 <header id="bar">
   <button id="menu" aria-label="القائمة">☰</button>
   <b class="brand">أقمار العراق</b>
   <span id="dust" class="chip"></span>
 </header>
 <aside id="side">
+  <div id="grab" aria-hidden="true"></div>
   <section>
-    <label>الطبقة<select id="layer"></select></label>
-    <div id="linfo" class="hint"></div><div id="zhint" class="hint warn"></div>
+    <form id="geo" class="row" role="search"><input id="gq" type="search" maxlength="120" placeholder="ابحث عن أي مكان: حي الجامعة بغداد" autocomplete="off" aria-label="بحث عن مكان"><button>بحث</button></form>
+    <div id="gres" role="listbox"></div>
+  </section>
+  <section>
+    <h3>مصدر الصورة</h3>
+    <select id="src" aria-label="مصدر الصورة"></select>
+    <select id="wbsel" hidden aria-label="إصدار أرشيف Wayback"></select>
+    <div class="row wrap"><button id="today">🛰️ صورة القمر اليوم</button><button id="cmpbtn" aria-pressed="false">⇆ مقارنة</button><button id="install" hidden>⬇ تثبيت التطبيق</button></div>
+    <div id="cmpbox" hidden><label>قارن مع (الجهة اليمنى)<select id="srcB"></select></label></div>
+    <label class="chk"><input id="sharp" type="checkbox" checked autocomplete="off"> أعلى وضوح (بلاطات أدق، بيانات أكثر)</label>
+    <div id="srcinfo" class="hint"></div>
+    <div class="hint">صور Esri/Maxar هي الأدق المتاحة مجانًا للعراق (حتى ~0.3–0.5 م في المدن) وليست صور اليوم. «صورة القمر اليوم» منخفضة الدقة (250 م) لكنها حديثة.</div>
+    <div id="zhint" class="hint warn"></div>
+  </section>
+  <section>
+    <h3>التاريخ (للطبقات الإضافية وصورة اليوم)</h3>
     <div class="row">
       <button id="prev" title="اليوم السابق">›</button>
       <input id="date" type="date" aria-label="التاريخ">
       <button id="next" title="اليوم التالي">‹</button>
-      <button id="latest">الأحدث</button>
+      <button id="latest">الأحدث</button><button id="anim" title="تحريك آخر 7 أيام">▶ 7 أيام</button>
     </div>
   </section>
   <section>
     <h3>طبقات إضافية</h3>
     <div id="overlays"></div>
-    <label class="chk"><input id="saver" type="checkbox"> توفير البيانات</label>
+    <label class="chk"><input id="names" type="checkbox" checked autocomplete="off"> الأسماء والطرق والحدود</label>
+    <label class="chk"><input id="wind" type="checkbox" autocomplete="off"> حركة الرياح</label>
+    <label class="chk"><input id="saver" type="checkbox" autocomplete="off"> توفير البيانات</label>
   </section>
   <section>
     <h3>المساعد</h3>
@@ -47,6 +86,7 @@
   <footer>
     <div id="fresh"></div>
     <p>صور: <a href="https://earthdata.nasa.gov/gibs" rel="noopener">NASA GIBS/ESDIS</a> · NASA HLS · بيانات <a href="https://www.copernicus.eu" rel="noopener">Copernicus</a> Sentinel · <span id="eox"></span></p>
+    <p>الصور عالية الدقة وأرشيفها: Esri World Imagery (Clarity وWayback) · Esri, Maxar, Earthstar Geographics, and the GIS User Community. البحث: Photon/Nominatim © OpenStreetMap.</p>
     <p>بيانات الطقس من <a href="https://open-meteo.com" rel="noopener">Open-Meteo.com</a> (CC BY 4.0) · <a href="https://earthquake.usgs.gov" rel="noopener">USGS</a></p>
     <p>الموقع مجاني وغير ربحي.</p>
   </footer>

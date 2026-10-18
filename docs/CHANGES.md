@@ -5,3 +5,9 @@
 - CSP: أُضيف tiles.openfreemap.org (أسماء وطرق OSM بلا مفاتيح وبلا حدود) وclarity.maptiles.arcgis.com (أرشيف Esri Clarity). الخطوط والعلامات تُجلب من OpenFreeMap مباشرة، فلا تستهلك تخزين Cloudflare.
 - أُضيف /rtl.js (إضافة تشكيل العربية لخرائط MapLibre، نسخة asm.js لأنها لا تحتاج wasm).
 - أُضيفت: جسيمات الرياح، تحريك 7 أيام، تحديد الموقع، أسماء ونواحٍ وشوارع للوطن العربي.
+
+## تحسينات الدقة والواجهة (18 أكتوبر 2026)
+- CSP: أُضيف `wayback.maptiles.arcgis.com` (أرشيف Esri بتواريخ مختلفة لنفس خدمة World Imagery)، و`s3-us-west-2.amazonaws.com` (احتياط لقائمة إصدارات Wayback إن غاب `data/wayback.json`)، و`photon.komoot.io` و`nominatim.openstreetmap.org` (البحث الجغرافي بالاسم، عند الضغط على «بحث» فقط).
+- مصدر الصورة صار قابلًا للاختيار: Esri (افتراضي) · Esri Clarity · Esri Wayback · صورة القمر اليوم (VIIRS/MODIS من GIBS).
+- أُضيف: بحث بالاسم، مقارنة بشريط منزلق بين أي مصدرين، زر تثبيت PWA وأيقونات PNG، شاشة تحميل، مؤشر الدقة (م/بكسل)، خط Tajawal محلي، كاش دون اتصال للواجهة.
+- `scripts/fetch-wayback.mjs` يحفظ قائمة الإصدارات في `data/wayback.json` ضمن خط البيانات.
