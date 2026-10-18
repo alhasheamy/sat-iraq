@@ -26,15 +26,15 @@ const placeIdx = buildPlaceIndex(cities);
 const layers = (res?.layers ?? []).filter((l) => l.status !== 'unavailable');
 const imagery = layers.filter((l) => l.kind === 'imagery');
 const overlays = layers.filter((l) => l.kind === 'overlay' && !/vector/i.test(l.format || ''));
-const S = { layer: '__esri', date: { mode: 'latest' }, ov: new Set(), saver: false };
+const S = { layer: 'esri', date: { mode: 'latest' }, ov: new Set(), saver: false };
 const log = (m) => { $('#log').textContent = m; };
 
 // ---------- الخريطة ----------
 const baseTpl = res?.base?.eox?.template ?? 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg';
 const map = new maplibregl.Map({
   container: 'map', style: { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [] }, center: [dv.lon, dv.lat], zoom: dv.zoom,
-  minZoom: 2, maxZoom: 20, dragRotate: false, attributionControl: false,
-  maxBounds: [[-25, -4], [72, 46]],
+  minZoom: 2, maxZoom: 19, dragRotate: false, attributionControl: false,
+  maxBounds: [[-28, -18], [68, 44]],
 });
 map.touchZoomRotate.disableRotation();
 maplibregl.setRTLTextPlugin(location.origin + '/rtl.js', true);
@@ -55,7 +55,7 @@ function raster(id, l, opacity) {
 }
 function applyMap() {
   if (!map.isStyleLoaded() && !map.getSource('base')) return;
-  raster('img', EXT[S.layer] ?? imagery.find((l) => l.id === S.layer), 1);
+  raster('img', ESRI_L, 1);
   for (const o of overlays) raster('ov-' + o.id, S.ov.has(o.id) ? o : null, 0.75);
 }
 const NAME = ['coalesce', ['get', 'name:ar'], ['get', 'name']];
@@ -94,35 +94,20 @@ map.on('zoom', () => document.body.classList.toggle('far', map.getZoom() < 6.5))
 map.on('error', (e) => { if (e?.error?.status === 404) return; });
 
 // ---------- الواجهة ----------
-const S2 = '__s2', ESRI = '__esri';
-const CLR = '__clarity';
-const EXT = {
-  [ESRI]: { id: ESRI, kind: 'base', maxZoom: 19, tileTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', note: 'صور عالية الدقة (أقل من متر في المدن). ليست صور اليوم، وتاريخ التصوير يختلف من منطقة لأخرى.' },
-  [CLR]: { id: CLR, kind: 'base', maxZoom: 19, tileTemplate: 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', note: 'أرشيف Esri «Clarity»: صور أنقى وأقل ظلالًا وغيومًا، وقد تكون أقدم (نسخة تجريبية).' },
-};
-function hint() {
-  const l = imagery.find((x) => x.id === S.layer);
-  const z = map.getZoom(), native = EXT[S.layer] ? 19 : l ? maxz(l) : 13;
-  $('#zhint').textContent = z > native + 0.6 ? (EXT[S.layer] ? 'هذا أقصى تقريب متاح للصور في هذه المنطقة.' : l ? `تجاوزت أقصى دقة لهذه الطبقة (${l.resolution_m} م) فتبدو الصورة مكبّرة. لتفاصيل أدق اختر «HLS 30 م» أو «Sentinel-2 10 م».` : 'تجاوزت أقصى دقة للخلفية (≈10 م)؛ الصورة مكبّرة.') : '';
-}
+const ESRI_L = { id: 'esri', kind: 'base', maxZoom: 19, tileTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' };
+const hint = () => { $('#zhint').textContent = map.getZoom() > 19.2 ? 'هذا أقصى تقريب متاح للصور.' : ''; };
 map.on('zoomend', hint);
 function refreshUI() {
-  const l = imagery.find((x) => x.id === S.layer);
-  $('#layer').value = S.layer ?? '';
-  $('#date').value = S.date.mode === 'latest' ? (l ? latestOf(l) : today) : S.date.date;
+  const first = overlays.find((o) => S.ov.has(o.id)) ?? overlays[0];
+  $('#date').value = S.date.mode === 'latest' ? (first ? latestOf(first) : today) : S.date.date;
   $('#date').max = today;
   $('#saver').checked = S.saver;
   document.querySelectorAll('#overlays input').forEach((i) => (i.checked = S.ov.has(i.dataset.id)));
   hint();
-  $('#linfo').textContent = EXT[S.layer] ? EXT[S.layer].note : S.layer === S2 ? 'خلفية Sentinel-2 بلا غيوم، دقة 10 م (مركّب سنوي، وليست صورة اليوم).' : l ? [l.resolution_m && `دقة ${l.resolution_m} م`, l.latency && `التأخر: ${l.latency}`, l.status === 'no_recent_tile' && '⚠ لا بلاطة حديثة',
-    /jpe?g/i.test(l.format || '') && S.date.mode === 'latest' && 'الأحدث = أمس لاكتمال التغطية (صورة اليوم تظهر ناقصة)',
-    l.patchy && 'صور 30 م ليست متاحة كل يوم لكل مكان؛ جرّب تاريخًا آخر.'].filter(Boolean).join(' · ') : 'لا توجد طبقات متاحة حاليًا.';
 }
 const sync = () => { refreshUI(); applyMap(); };
 const setDate = (d) => { S.date = d; sync(); };
 
-$('#layer').append(h('option', { value: ESRI }, 'أدق صور (Esri · أقل من متر)'), h('option', { value: CLR }, 'أدق صور – أرشيف أنقى (Clarity)'), h('option', { value: S2 }, 'Sentinel-2 بلا غيوم (10 م · سنوي)'), ...imagery.map((l) => h('option', { value: l.id }, l.title_ar + (l.status === 'no_recent_tile' ? ' ⚠' : ''))));
-$('#layer').onchange = (e) => { S.layer = e.target.value; sync(); };
 $('#date').onchange = (e) => e.target.value && e.target.value <= today && setDate({ mode: 'date', date: e.target.value });
 $('#prev').onclick = () => setDate({ mode: 'date', date: addDays($('#date').value || today, -1) });
 $('#next').onclick = () => { const d = addDays($('#date').value || today, 1); d <= today ? setDate({ mode: 'date', date: d }) : setDate({ mode: 'latest' }); };
@@ -203,19 +188,19 @@ $('#cities').append(...cities.filter((c) => c.iraqGov).map((c) => {
   const t = wx?.cities?.find((x) => x.id === c.id)?.current?.temperature_2m;
   return h('button', { class: 'city', onclick: () => { fly(c.lat, c.lon, 10); showCity(c); } }, h('span', {}, c.ar), h('span', {}, typeof t === 'number' ? `${Math.round(t)}° ` : '', lv && lv !== 'normal' ? h('span', { class: 'badge ' + lv }, 'غبار ' + (LV[lv] ?? lv)) : null));
 }));
-$('#presets').append(...(await getJSON('/data/config/presets.json'))?.presets?.map((p) => h('button', { onclick: () => fly(p.lat, p.lon, p.zoom) }, p.ar)) ?? []);
+$('#presets').append(h('button', { onclick: () => fly(24, 22, 3.2) }, 'الوطن العربي'), ...(await getJSON('/data/config/presets.json'))?.presets?.map((p) => h('button', { onclick: () => fly(p.lat, p.lon, p.zoom) }, p.ar)) ?? []);
 
 // ---------- المساعد ----------
 function run(a) {
   switch (a.type) {
     case 'fly_to': fly(a.lat, a.lon, a.zoom); return true;
-    case 'set_layer': if (!imagery.some((l) => l.id === a.id)) return false; S.layer = a.id; sync(); return true;
+    case 'set_layer': return false;
     case 'set_date': setDate(a.date); return true;
     case 'toggle_overlay': if (!overlays.some((o) => o.id === a.id)) return false; a.on ? S.ov.add(a.id) : S.ov.delete(a.id); sync(); return true;
     case 'open_weather': { const c = cityById[a.cityId]; fly(a.lat, a.lon, 9); c ? showCity(c) : showPoint(a.lat, a.lon); return true; }
     case 'animate': animate(a.days); return true;
     case 'data_saver': S.saver = !!a.on; sync(); return true;
-    case 'reset': S.date = { mode: 'latest' }; S.ov.clear(); S.layer = imagery[0]?.id; sync(); fly(dv.lat, dv.lon, dv.zoom); return true;
+    case 'reset': S.date = { mode: 'latest' }; S.ov.clear(); sync(); fly(dv.lat, dv.lon, dv.zoom); return true;
     default: return false;
   }
 }
@@ -257,11 +242,10 @@ $('#ask').onsubmit = async (e) => {
 let anim;
 function animate(days) {
   clearInterval(anim);
-  const l = imagery.find((x) => x.id === S.layer) ?? imagery[0];
-  if (!l) return log('اختر طبقة صور يومية أولًا.');
-  if (EXT[S.layer] || S.layer === S2) S.layer = l.id;
-  const base = latestOf(l); let i = Math.min(7, Math.max(2, days));
-  log(`تحريك آخر ${i} أيام…`);
+  const o = overlays.find((x) => S.ov.has(x.id));
+  if (!o) return log('فعّل طبقة إضافية (غبار، حرارة، نباتات) ثم اضغط التحريك.');
+  const base = latestOf(o); let i = Math.min(7, Math.max(2, days));
+  log(`تحريك آخر ${i} أيام للطبقة: ${o.title_ar}`);
   anim = setInterval(() => { setDate({ mode: 'date', date: addDays(base, -i) }); if (--i < 0) { clearInterval(anim); S.date = { mode: 'latest' }; sync(); } }, 1600);
 }
 

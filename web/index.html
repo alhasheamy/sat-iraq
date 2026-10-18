@@ -21,8 +21,8 @@
 <aside id="side">
   <div id="grab" aria-hidden="true"></div>
   <section>
-    <label>الطبقة<select id="layer"></select></label>
-    <div id="linfo" class="hint"></div><div id="zhint" class="hint warn"></div>
+    <div class="hint">الصور الأساسية: Esri (أقل من متر في المدن، وليست صور اليوم). التاريخ أدناه للطبقات الإضافية.</div>
+    <div id="zhint" class="hint warn"></div>
     <div class="row">
       <button id="prev" title="اليوم السابق">›</button>
       <input id="date" type="date" aria-label="التاريخ">
@@ -33,9 +33,9 @@
   <section>
     <h3>طبقات إضافية</h3>
     <div id="overlays"></div>
-    <label class="chk"><input id="names" type="checkbox" checked> الأسماء والطرق والحدود</label>
-    <label class="chk"><input id="wind" type="checkbox"> حركة الرياح</label>
-    <label class="chk"><input id="saver" type="checkbox"> توفير البيانات</label>
+    <label class="chk"><input id="names" type="checkbox" checked autocomplete="off"> الأسماء والطرق والحدود</label>
+    <label class="chk"><input id="wind" type="checkbox" autocomplete="off"> حركة الرياح</label>
+    <label class="chk"><input id="saver" type="checkbox" autocomplete="off"> توفير البيانات</label>
   </section>
   <section>
     <h3>المساعد</h3>
