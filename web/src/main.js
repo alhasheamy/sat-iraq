@@ -53,7 +53,7 @@ function raster(id, l, opacity) {
 }
 function applyMap() {
   if (!map.isStyleLoaded() && !map.getSource('base')) return;
-  raster('img', imagery.find((l) => l.id === S.layer), 1);
+  raster('img', S.layer === ESRI ? ESRI_L : imagery.find((l) => l.id === S.layer), 1);
   for (const o of overlays) raster('ov-' + o.id, S.ov.has(o.id) ? o : null, 0.75);
 }
 map.on('load', () => {
@@ -65,11 +65,12 @@ map.on('zoom', () => document.body.classList.toggle('far', map.getZoom() < 6.5))
 map.on('error', (e) => { if (e?.error?.status === 404) return; });
 
 // ---------- الواجهة ----------
-const S2 = '__s2';
+const S2 = '__s2', ESRI = '__esri';
+const ESRI_L = { id: ESRI, kind: 'base', maxZoom: 19, tileTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' };
 function hint() {
   const l = imagery.find((x) => x.id === S.layer);
-  const z = map.getZoom(), native = l ? maxz(l) : 13;
-  $('#zhint').textContent = z > native + 0.6 ? (l ? `تجاوزت أقصى دقة لهذه الطبقة (${l.resolution_m} م) فتبدو الصورة مكبّرة. لتفاصيل أدق اختر «HLS 30 م» أو «Sentinel-2 10 م».` : 'تجاوزت أقصى دقة للخلفية (≈10 م)؛ الصورة مكبّرة.') : '';
+  const z = map.getZoom(), native = S.layer === ESRI ? 19 : l ? maxz(l) : 13;
+  $('#zhint').textContent = z > native + 0.6 ? (S.layer === ESRI ? 'هذا أقصى تقريب متاح للصور في هذه المنطقة.' : l ? `تجاوزت أقصى دقة لهذه الطبقة (${l.resolution_m} م) فتبدو الصورة مكبّرة. لتفاصيل أدق اختر «HLS 30 م» أو «Sentinel-2 10 م».` : 'تجاوزت أقصى دقة للخلفية (≈10 م)؛ الصورة مكبّرة.') : '';
 }
 map.on('zoomend', hint);
 function refreshUI() {
@@ -80,14 +81,14 @@ function refreshUI() {
   $('#saver').checked = S.saver;
   document.querySelectorAll('#overlays input').forEach((i) => (i.checked = S.ov.has(i.dataset.id)));
   hint();
-  $('#linfo').textContent = S.layer === S2 ? 'خلفية Sentinel-2 بلا غيوم، دقة 10 م (مركّب سنوي، وليست صورة اليوم).' : l ? [l.resolution_m && `دقة ${l.resolution_m} م`, l.latency && `التأخر: ${l.latency}`, l.status === 'no_recent_tile' && '⚠ لا بلاطة حديثة',
+  $('#linfo').textContent = S.layer === ESRI ? 'صور عالية الدقة (أقل من متر في المدن). ليست صور اليوم، وتاريخ التصوير يختلف من منطقة لأخرى.' : S.layer === S2 ? 'خلفية Sentinel-2 بلا غيوم، دقة 10 م (مركّب سنوي، وليست صورة اليوم).' : l ? [l.resolution_m && `دقة ${l.resolution_m} م`, l.latency && `التأخر: ${l.latency}`, l.status === 'no_recent_tile' && '⚠ لا بلاطة حديثة',
     /jpe?g/i.test(l.format || '') && S.date.mode === 'latest' && 'الأحدث = أمس لاكتمال التغطية (صورة اليوم تظهر ناقصة)',
     l.patchy && 'صور 30 م ليست متاحة كل يوم لكل مكان؛ جرّب تاريخًا آخر.'].filter(Boolean).join(' · ') : 'لا توجد طبقات متاحة حاليًا.';
 }
 const sync = () => { refreshUI(); applyMap(); };
 const setDate = (d) => { S.date = d; sync(); };
 
-$('#layer').append(h('option', { value: S2 }, 'Sentinel-2 بلا غيوم (10 م · سنوي)'), ...imagery.map((l) => h('option', { value: l.id }, l.title_ar + (l.status === 'no_recent_tile' ? ' ⚠' : ''))));
+$('#layer').append(h('option', { value: ESRI }, 'تفاصيل الشوارع والمباني (عالية الدقة)'), h('option', { value: S2 }, 'Sentinel-2 بلا غيوم (10 م · سنوي)'), ...imagery.map((l) => h('option', { value: l.id }, l.title_ar + (l.status === 'no_recent_tile' ? ' ⚠' : ''))));
 $('#layer').onchange = (e) => { S.layer = e.target.value; sync(); };
 $('#date').onchange = (e) => e.target.value && e.target.value <= today && setDate({ mode: 'date', date: e.target.value });
 $('#prev').onclick = () => setDate({ mode: 'date', date: addDays($('#date').value || today, -1) });
@@ -98,6 +99,7 @@ $('#overlays').append(...overlays.map((o) => h('label', { class: 'chk' }, h('inp
 if (!overlays.length) $('#overlays').textContent = 'لا توجد طبقات إضافية متاحة.';
 $('#menu').onclick = () => document.body.classList.toggle('open');
 $('#eox').textContent = res?.base?.eox?.attribution ?? 'EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data)';
+$('#eox').append(' · الصور عالية الدقة: Esri, Maxar, Earthstar Geographics, and the GIS User Community');
 
 // حالة البيانات والغبار
 if (meta?.generatedAt) {
