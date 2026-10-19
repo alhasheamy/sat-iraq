@@ -5,6 +5,8 @@ import '@fontsource/tajawal/arabic-500.css';
 import '@fontsource/tajawal/arabic-700.css';
 import './style.css';
 import { buildPlaceIndex, findPlaceInText, normalizeArabic } from '../../shared/arabic.js';
+import { metaQueryUrl, parseMeta, rankBest, metaLine, digitalZoom, bestSummary, parseOpenItem, stacQuery, openTileTemplate, nativeZoom, verdict, VERDICT_LABEL, fmtRes, isoDate, bidi, OPEN_HOST, OPEN_COLLECTIONS } from '../../shared/imagery.js';
+import { pathLength, polygonArea, fmtLen, fmtArea } from '../../shared/measure.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (t, a = {}, ...k) => {
@@ -27,45 +29,62 @@ const cities = cityCfg?.cities ?? [];
 const cityById = Object.fromEntries(cities.map((c) => [c.id, c]));
 const placeIdx = buildPlaceIndex(cities);
 const layers = (res?.layers ?? []).filter((l) => l.status !== 'unavailable');
-const imagery = layers.filter((l) => l.kind === 'imagery');
+// طبقات GIBS هنا بيانات فقط (غبار/حرارة/نبات/حرائق). كل صور القاعدة من Esri (راجع srcDef).
 const overlays = layers.filter((l) => l.kind === 'overlay' && !/vector/i.test(l.format || ''));
-const S = { layer: 'esri', cmp: null, date: { mode: 'latest' }, ov: new Set(), saver: false, sharp: true };
+const S = { layer: 'esri', cmp: null, date: { mode: 'latest' }, ov: new Set(), saver: false, sharp: true, enh: false, auto: false, nativeRes: null };
+const ENH = { 'raster-contrast': 0.12, 'raster-saturation': 0.08 }; // تحسين اختياري: تباين وتشبّع فقط، لا يضيف تفاصيل
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* التخزين محجوب */ } };
 const toast = (m) => { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2200); };
 const extra = ((await getJSON('/data/config/extra-imagery.json'))?.sources ?? []).filter((e) => e.id && /^https:\/\//.test(e.tiles || '') && ['{z}', '{x}', '{y}'].every((t) => e.tiles.includes(t)));
-const wb = ((await getJSON('/data/wayback.json'))?.items) ?? await fetch('https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json', { signal: AbortSignal.timeout(8000) }).then((r) => r.json()).then((j) => Object.entries(j).map(([n, v]) => ({ n: +n, d: /(\d{4}-\d{2}-\d{2})/.exec(v.itemTitle || '')?.[1] })).filter((x) => x.d).sort((a, b) => b.d.localeCompare(a.d))).catch(() => []);
-let map2 = null;
+const wbParse = (j) => Object.entries(j).map(([n, v]) => ({ n: +n, d: /(\d{4}-\d{2}-\d{2})/.exec(v.itemTitle || '')?.[1], m: /services\/([^/]+)\/MapServer/.exec(v.metadataLayerUrl || '')?.[1] })).filter((x) => x.n && x.d).sort((a, b) => b.d.localeCompare(a.d));
+let wb = (await getJSON('/data/wayback.json'))?.items ?? [];
+// نسخة قديمة بلا اسم خدمة الدقة (m) أو قائمة فارغة: نقرأ قائمة Esri مباشرة
+if (!wb.length || !wb[0].m) wb = await fetch('https://s3-us-west-2.amazonaws.com/config.maptiles.arcgis.com/waybackconfig.json', { signal: AbortSignal.timeout(8000) }).then((r) => r.json()).then(wbParse).catch(() => wb);
+const oamSrc = new Map();
+let map2 = null, m2ready = false, ready = false, mOn = false, t3 = false;
 const log = (m) => { $('#log').textContent = m; };
 
 // ---------- الخريطة ----------
-const baseTpl = res?.base?.eox?.template ?? 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg';
+// خلفية داكنة تظهر لحظة التحميل فقط. كل الصور من Esri، ولا تُعرض أي صور أقل دقة منها.
+const BG = { id: 'bg', type: 'background', paint: { 'background-color': '#0b1b2b' } };
 const map = new maplibregl.Map({
-  container: 'map', hash: 'v', style: { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [] }, center: [dv.lon, dv.lat], zoom: dv.zoom,
-  minZoom: 2, maxZoom: 19, dragRotate: false, attributionControl: false,
+  container: 'map', hash: 'v', style: { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [BG] }, center: [dv.lon, dv.lat], zoom: dv.zoom,
+  minZoom: 2, maxZoom: 19, maxPitch: 75, maxTileCacheSize: 300, dragRotate: false, attributionControl: false,
   maxBounds: [[-28, -18], [68, 44]],
 });
 map.touchZoomRotate.disableRotation();
 maplibregl.setRTLTextPlugin(location.origin + '/rtl.js', true);
+map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 map.addControl(new maplibregl.GeolocateControl({ positionOptions: { enableHighAccuracy: true } }), 'bottom-right');
 map.addControl(new maplibregl.FullscreenControl({ container: document.body }), 'bottom-right');
 map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-// صور JPEG اليومية بلا شفافية: يوم اليوم غير مكتمل التغطية فيظهر أسود، لذا «الأحدث» = اليوم السابق لها
-const latestOf = (l) => { const d = l.latestDate || today; return l.kind === 'imagery' && /jpe?g/i.test(l.format || '') ? addDays(d, -1) : d; };
+// تاريخ «الأحدث» لطبقة بيانات (غبار/حرارة/نبات): آخر بلاطة فحصها خط البيانات، وإلا اليوم
+const latestOf = (l) => l.latestDate || today;
 const dateFor = (l) => (S.date.mode === 'latest' ? latestOf(l) : S.date.date);
 const maxz = (l) => { const m = l.maxZoom ?? 9; return S.saver && l.dataSaverMaxZoom ? Math.min(m, l.dataSaverMaxZoom) : m; };
+const ESRI_ATTR = 'Esri, Maxar, Earthstar Geographics, and the GIS User Community';
 function raster(id, l, opacity, m = map) {
   if (m.getLayer(id)) m.removeLayer(id);
   if (m.getSource(id)) m.removeSource(id);
   if (!l) return;
-  m.addSource(id, { type: 'raster', tiles: [l.tileTemplate.replace('{time}', dateFor(l))], tileSize: l.sharp && S.sharp ? 128 : 256, maxzoom: maxz(l), ...(l.scheme === 'tms' ? { scheme: 'tms' } : {}), ...(l.bounds ? { bounds: l.bounds } : {}) });
-  m.addLayer({ id, type: 'raster', source: id, paint: { 'raster-opacity': opacity, 'raster-fade-duration': 150 } }, m.getLayer('road-case') ? 'road-case' : undefined);
+  const tpl = (l.retina && S.sharp ? l.tileTemplate.replace('@1x', '@2x') : l.tileTemplate).replace('{time}', dateFor(l));
+  m.addSource(id, { type: 'raster', tiles: [tpl], tileSize: l.sharp && S.sharp ? 128 : 256, maxzoom: maxz(l), ...(l.scheme === 'tms' ? { scheme: 'tms' } : {}), ...(l.bounds ? { bounds: l.bounds } : {}), attribution: l.attribution ?? (l.gibsId ? 'NASA GIBS/ESDIS' : '') });
+  m.addLayer({ id, type: 'raster', source: id, paint: { 'raster-opacity': opacity, 'raster-fade-duration': 150, ...(S.enh && id.startsWith('img') ? ENH : {}) } }, m.getLayer('road-case') ? 'road-case' : undefined);
+}
+// مصدر محلي التغطية (درون/أرشيف خاص) يُعرض فوق Esri كي لا تبقى الخريطة فارغة خارج حدوده
+function stack(m, id, key) {
+  const d = srcDef(key);
+  raster(id + '-under', d.local ? srcDef('esri') : null, 1, m);
+  raster(id, d, 1, m);
 }
 function applyMap() {
-  if (!map.isStyleLoaded() && !map.getSource('base')) return;
-  raster('img', srcDef(S.layer), 1);
+  if (!ready) return;
+  stack(map, 'img', S.layer);
   for (const o of overlays) raster('ov-' + o.id, S.ov.has(o.id) ? o : null, 0.75);
-  if (map2 && S.cmp) raster('img2', srcDef(S.cmp), 1, map2);
+  if (map2 && m2ready && S.cmp) stack(map2, 'img2', S.cmp);
   hint();
 }
 const NAME = ['coalesce', ['get', 'name:ar'], ['get', 'name']];
@@ -94,32 +113,40 @@ function addVec() {
 }
 const setNames = (on) => [map, map2].forEach((m) => m && VEC.forEach((l) => m.getLayer(l.id) && m.setLayoutProperty(l.id, 'visibility', on ? 'visible' : 'none')));
 map.on('load', () => {
-  map.addSource('base', { type: 'raster', tiles: [baseTpl], tileSize: 256, maxzoom: 13 });
-  map.addLayer({ id: 'base', type: 'raster', source: 'base' });
   addVec();
+  ready = true;
   applyMap();
   setNames($('#names').checked);
 });
 map.on('zoom', () => document.body.classList.toggle('far', map.getZoom() < 6.5));
-map.on('error', (e) => { if (e?.error?.status === 404) return; });
+{ let n = 0, t0 = 0, oamWarn = 0; // تنبيه واحد بدل سيل أخطاء عند تعذّر البلاطات
+  map.on('error', (e) => {
+    const st = e?.error?.status, now = Date.now();
+    if (st === 404 || st === 204) return;
+    if (S.layer.startsWith('oam:') && st >= 400) { if (now - oamWarn > 15000) { oamWarn = now; toast('تعذّر تحميل بلاطات هذه الصورة المفتوحة. اختر Esri من قائمة المصدر.'); } return; }
+    if (now - t0 > 10000) { t0 = now; n = 0; }
+    if (++n === 12) toast('تعذّر تحميل بعض بلاطات الصور. تحقق من الاتصال أو غيّر المصدر.');
+  });
+}
 
 // ---------- الواجهة ----------
 const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const CLAR = 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const WBU = (n) => `https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/${n}/{z}/{y}/{x}`;
-const gibs = imagery.filter((l) => l.status === 'ok' || l.status === 'no_recent_tile');
 const srcDef = (k) => {
-  if (k === 'esri') return { id: 'esri', maxZoom: 19, sharp: true, tileTemplate: ESRI, name: 'Esri World Imagery' };
-  if (k === 'clarity') return { id: 'clarity', maxZoom: 19, sharp: true, tileTemplate: CLAR, name: 'Esri Clarity' };
-  if (k?.startsWith('wb:')) return { id: k, maxZoom: 19, sharp: true, tileTemplate: WBU(k.slice(3)), name: 'Wayback ' + (wb.find((x) => 'wb:' + x.n === k)?.d ?? '') };
-  if (k?.startsWith('x:')) { const e = extra.find((x) => 'x:' + x.id === k); if (e) return { id: k, maxZoom: e.maxZoom ?? 20, tileTemplate: e.tiles, scheme: e.scheme, bounds: e.bounds, attribution: e.attribution, name: e.title_ar }; }
-  const l = gibs.find((x) => 'gibs:' + x.id === k);
-  return l ? { ...l, name: l.title_ar } : srcDef('esri');
+  if (k === 'esri') return { id: 'esri', maxZoom: 19, sharp: true, tileTemplate: ESRI, name: 'Esri World Imagery', attribution: ESRI_ATTR };
+  if (k === 'clarity') return { id: 'clarity', maxZoom: 19, sharp: true, tileTemplate: CLAR, name: 'Esri Clarity', attribution: ESRI_ATTR };
+  if (k?.startsWith('wb:')) return { id: k, maxZoom: 19, sharp: true, tileTemplate: WBU(k.slice(3)), name: 'Wayback ' + (wb.find((x) => 'wb:' + x.n === k)?.d ?? ''), attribution: ESRI_ATTR + ' · Esri Wayback' };
+  if (k?.startsWith('x:')) { const e = extra.find((x) => 'x:' + x.id === k); if (e) return { id: k, maxZoom: e.maxZoom ?? 20, tileTemplate: e.tiles, scheme: e.scheme, bounds: e.bounds, attribution: e.attribution, name: e.title_ar, local: true }; }
+  if (k?.startsWith('oam:') && oamSrc.has(k)) return oamSrc.get(k);
+  return srcDef('esri');
 };
 const mpp = () => 156543.03392 * Math.cos((map.getCenter().lat * Math.PI) / 180) / 2 ** (map.getZoom() + 1);
 const hint = () => {
   const d = srcDef(S.layer), over = map.getZoom() + 1 > (d.maxZoom ?? 9) + 0.05;
-  $('#zhint').textContent = over ? 'تكبير رقمي: الصورة الأصلية لا تزيد دقة عن هذا الحد، وما بعده مجرد تكبير للبكسلات.' : '';
+  const dz = S.nativeRes && (S.layer === 'esri' || S.layer.startsWith('wb:')) ? digitalZoom(S.nativeRes, mpp()) : null;
+  $('#zhint').textContent = dz > 1 ? `تكبير رقمي ×${dz}: دقة الصورة الأصلية هنا ${fmtRes(S.nativeRes)} بينما تعرض الشاشة ${fmtRes(mpp())} لكل بكسل، فتبدو مشوّشة. هذا حد المصدر وليس عطلًا.${$('#bestbtn').hidden ? '' : ' جرّب «🎯 أدق صورة هنا»: قد يوجد إصدار أدق في أرشيف Esri.'}`
+    : over ? 'تكبير رقمي: الصورة الأصلية لا تزيد دقة عن هذا الحد، وما بعده مجرد تكبير للبكسلات.' : '';
 };
 const hud = () => { const c = map.getCenter(), m = mpp(); $('#hud').textContent = `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} · z${(map.getZoom() + 1).toFixed(1)} · ≈${m < 1 ? m.toFixed(2) : m < 100 ? m.toFixed(1) : Math.round(m)} م/بكسل`; };
 map.on('move', hud); hud();
@@ -148,8 +175,6 @@ $('#names').onchange = (e) => setNames(e.target.checked);
 $('#wind').onchange = (e) => (e.target.checked ? startWind() : stopWind());
 $('#anim').onclick = () => animate(7);
 $('#menu').onclick = () => document.body.classList.toggle('open');
-$('#eox').textContent = res?.base?.eox?.attribution ?? 'EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data)';
-$('#eox').append(' · الخرائط والأسماء: OpenFreeMap © OpenMapTiles، بيانات OpenStreetMap · الصور عالية الدقة: Esri, Maxar, Earthstar Geographics, and the GIS User Community');
 
 // حالة البيانات والغبار
 if (meta?.generatedAt) {
@@ -202,9 +227,9 @@ async function showPoint(lat, lon, title = 'الموقع المحدد') {
 const mobile = () => innerWidth <= 760;
 const sheet = (on) => document.body.classList.toggle('open', on);
 // على الجوال: النقر على الخريطة والقائمة مفتوحة يغلقها فقط، وإن كانت مغلقة يعرض طقس النقطة
-map.on('click', (e) => { if (mobile() && document.body.classList.contains('open')) return sheet(false); showPoint(e.lngLat.lat, e.lngLat.lng); });
+map.on('click', (e) => { if (mOn) return; if (mobile() && document.body.classList.contains('open')) return sheet(false); showPoint(e.lngLat.lat, e.lngLat.lng); });
 map.on('dragstart', () => mobile() && sheet(false));
-addEventListener('keydown', (e) => e.key === 'Escape' && sheet(false));
+addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; sheet(false); if (mOn) setMeas(false); });
 // السحب للأسفل لإغلاق القائمة (من المقبض، أو من أعلى المحتوى)
 { const side = $('#side'); let y0 = null, dy = 0;
   side.addEventListener('touchstart', (e) => { if (mobile() && (e.target.closest('#grab') || side.scrollTop <= 0)) { y0 = e.touches[0].clientY; dy = 0; } }, { passive: true });
@@ -226,11 +251,12 @@ $('#cities').append(...cities.filter((c) => c.iraqGov).map((c) => {
 $('#presets').append(h('button', { onclick: () => fly(24, 22, 3.2) }, 'الوطن العربي'), ...(await getJSON('/data/config/presets.json'))?.presets?.map((p) => h('button', { onclick: () => fly(p.lat, p.lon, p.zoom) }, p.ar)) ?? []);
 
 // ---------- المساعد ----------
+const ESRI_IDS = ['esri', 'clarity'];
 function run(a) {
   switch (a.type) {
     case 'fly_to': fly(a.lat, a.lon, a.zoom); return true;
-    case 'set_layer': { const k = 'gibs:' + a.id; if (!gibs.some((l) => 'gibs:' + l.id === k)) return false; setSrc(k); return true; }
-    case 'compare': { const A = 'gibs:' + a.a?.layer, B = 'gibs:' + a.b?.layer; if (!gibs.some((l) => 'gibs:' + l.id === A) || !gibs.some((l) => 'gibs:' + l.id === B)) return false; setSrc(A); S.cmp = B; $('#srcB').value = B; map2 ? sync() : cmpOn(); return true; }
+    case 'set_layer': { if (!ESRI_IDS.includes(a.id)) return false; setSrc(a.id); return true; }
+    case 'compare': { const A = a.a?.layer, B = a.b?.layer; if (!ESRI_IDS.includes(A) || !ESRI_IDS.includes(B)) return false; setSrc(A); if (map2) { S.cmp = B; $('#srcB').value = B; info(); sync(); } else cmpOn(B); return true; }
     case 'set_date': setDate(a.date); return true;
     case 'toggle_overlay': if (!overlays.some((o) => o.id === a.id)) return false; a.on ? S.ov.add(a.id) : S.ov.delete(a.id); sync(); return true;
     case 'open_weather': { const c = cityById[a.cityId]; fly(a.lat, a.lon, 9); c ? showCity(c) : showPoint(a.lat, a.lon); return true; }
@@ -241,7 +267,7 @@ function run(a) {
   }
 }
 const OVL = [[/غبار|عجاج|هباء/, 'aerosol-aod'], [/حرارة سطح/, 'lst-day'], [/نبات|زراع|ndvi/, 'ndvi-8day']];
-const LYR = [[/viirs|فيرس/, 'viirs-noaa20'], [/مودس|modis/, 'modis-terra'], [/تفصيل|hls|30 م/, 'hls-s30']];
+const LYR = [[/clarity|كلاريتي/, 'clarity'], [/esri|ايسري|اسري|الافتراضي/, 'esri']];
 function localParse(text) {
   const n = normalizeArabic(text), acts = [], city = findPlaceInText(text, placeIdx);
   const off = /(اخف|اغلق|الغ|ايقاف|بدون)/.test(n);
@@ -266,7 +292,7 @@ $('#ask').onsubmit = async (e) => {
   try {
     const c = map.getCenter();
     const r = await fetch('/api/assistant', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(20000),
-      body: JSON.stringify({ text, state: { lat: c.lat, lon: c.lng, zoom: map.getZoom(), layer: S.layer.replace(/^gibs:/, ''), date: S.date.mode === 'latest' ? 'latest' : S.date.date, overlays: [...S.ov] } }) });
+      body: JSON.stringify({ text, state: { lat: c.lat, lon: c.lng, zoom: map.getZoom(), layer: S.layer, date: S.date.mode === 'latest' ? 'latest' : S.date.date, overlays: [...S.ov] } }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.ok) { log(ERR[j.error] ?? 'تعذّر الاتصال بالمساعد. جرّب: أرني البصرة · الغبار · أمس · طقس أربيل'); return; }
     const done = (j.actions ?? []).map(run).filter(Boolean).length;
@@ -330,13 +356,12 @@ function stopWind() { cancelAnimationFrame(windRaf); const cv = $('#windcv'); cv
 // ---------- مصدر الصورة والمقارنة والبحث ----------
 const opt = (v, t) => h('option', { value: v }, t);
 const xOpt = (e) => opt('x:' + e.id, '📍 ' + e.title_ar);
-const gOpt = (l) => opt('gibs:' + l.id, `${l.title_ar} · ${l.resolution_m} م (حديثة)`);
-$('#src').append(opt('esri', 'Esri World Imagery (الأدق · افتراضي)'), opt('clarity', 'Esri Clarity (أرشيف أوضح أحيانًا)'), ...(wb.length ? [opt('wb', 'Esri Wayback (أرشيف بتواريخ)')] : []), ...gibs.map(gOpt), ...extra.map(xOpt));
+$('#src').append(opt('esri', 'Esri World Imagery (الأدق · افتراضي)'), opt('clarity', 'Esri Clarity (أرشيف أوضح أحيانًا)'), ...(wb.length ? [opt('wb', 'Esri Wayback (أرشيف بتواريخ)')] : []), ...extra.map(xOpt));
 $('#wbsel').append(...wb.map((x) => opt('wb:' + x.n, x.d)));
-$('#srcB').append(opt('esri', 'Esri الحالي'), opt('clarity', 'Esri Clarity'), ...wb.map((x) => opt('wb:' + x.n, 'Wayback ' + x.d)), ...gibs.map(gOpt), ...extra.map(xOpt));
+$('#srcB').append(opt('esri', 'Esri الحالي'), opt('clarity', 'Esri Clarity'), ...wb.map((x) => opt('wb:' + x.n, 'Wayback ' + x.d)), ...extra.map(xOpt));
 function info() {
   const d = srcDef(S.layer);
-  $('#srcinfo').textContent = d.resolution_m ? `${d.title_ar}: دقة ${d.resolution_m} م · التأخير ${d.latency ?? '—'}` : d.attribution ? 'المصدر: ' + d.attribution : '';
+  $('#srcinfo').textContent = d.attribution ? 'المصدر: ' + d.attribution : '';
   $('#la').textContent = d.name; $('#lb').textContent = S.cmp ? srcDef(S.cmp).name : '';
 }
 function setSrc(k) {
@@ -344,32 +369,26 @@ function setSrc(k) {
   map.setMaxZoom(Math.max(19, d.maxZoom ?? 19));
   if (d.bounds) { const c = map.getCenter(), b = d.bounds; if (c.lng < b[0] || c.lng > b[2] || c.lat < b[1] || c.lat > b[3]) map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, maxZoom: 17 }); }
   $('#src').value = w ? 'wb' : k; $('#wbsel').hidden = !w; if (w) $('#wbsel').value = k;
-  info(); sync();
+  info(); sync(); scheduleMeta();
 }
 $('#src').onchange = (e) => (e.target.value === 'wb' ? setSrc('wb:' + ($('#wbsel').value || wb[0].n)) : setSrc(e.target.value));
 $('#wbsel').onchange = (e) => setSrc(e.target.value);
 $('#sharp').onchange = (e) => { S.sharp = e.target.checked; sync(); };
 $('#srcB').onchange = (e) => { S.cmp = e.target.value; info(); sync(); };
-if (!gibs.length) $('#today').hidden = true;
-$('#today').onclick = () => {
-  const l = gibs.find((x) => x.status === 'ok') ?? gibs[0];
-  S.date = { mode: 'latest' }; setSrc('gibs:' + l.id);
-  if (map.getZoom() > 7) map.easeTo({ zoom: 6.5 });
-  toast('صورة القمر اليوم: ' + l.title_ar);
-};
 const cmpEl = $('#cmp'); let cmpMove;
 const setP = (v) => { v = Math.min(95, Math.max(5, v)); document.body.style.setProperty('--p', v + '%'); cmpEl.setAttribute('aria-valuenow', Math.round(v)); };
-function cmpOn() {
-  S.cmp = S.layer === 'esri' ? 'clarity' : 'esri'; $('#srcB').value = S.cmp;
+function cmpOn(b) {
+  if (t3) set3D(false);
+  S.cmp = b ?? (S.layer === 'esri' ? 'clarity' : 'esri'); $('#srcB').value = S.cmp; m2ready = false;
   document.body.classList.add('cmp'); cmpEl.hidden = $('#cmplab').hidden = $('#cmpbox').hidden = false; $('#cmpbtn').setAttribute('aria-pressed', 'true'); setP(50);
-  map2 = new maplibregl.Map({ container: 'map2', style: { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [] }, center: map.getCenter(), zoom: map.getZoom(), minZoom: 2, maxZoom: 24, interactive: false, attributionControl: false });
+  map2 = new maplibregl.Map({ container: 'map2', style: { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [BG] }, center: map.getCenter(), zoom: map.getZoom(), minZoom: 2, maxZoom: 24, interactive: false, attributionControl: false });
   cmpMove = () => map2.jumpTo({ center: map.getCenter(), zoom: map.getZoom() });
   map.on('move', cmpMove);
-  map2.on('load', () => { map2.addSource('omt', { type: 'vector', url: 'https://tiles.openfreemap.org/planet' }); VEC.forEach((l) => map2.addLayer(l)); setNames($('#names').checked); applyMap(); });
+  map2.on('load', () => { m2ready = true; map2.addSource('omt', { type: 'vector', url: 'https://tiles.openfreemap.org/planet' }); VEC.forEach((l) => map2.addLayer(l)); setNames($('#names').checked); applyMap(); });
   info();
 }
 function cmpOff() {
-  map.off('move', cmpMove); map2?.remove(); map2 = null; S.cmp = null;
+  map.off('move', cmpMove); map2?.remove(); map2 = null; m2ready = false; S.cmp = null;
   document.body.classList.remove('cmp'); cmpEl.hidden = $('#cmplab').hidden = $('#cmpbox').hidden = true; $('#cmpbtn').setAttribute('aria-pressed', 'false'); info();
 }
 $('#cmpbtn').onclick = () => (map2 ? cmpOff() : cmpOn());
@@ -417,6 +436,190 @@ $('#install').onclick = async () => { dip?.prompt(); await dip?.userChoice; dip 
 map.once('idle', () => { $('#splash')?.classList.add('off'); setTimeout(() => $('#splash')?.remove(), 700); });
 setTimeout(() => $('#splash')?.classList.add('off'), 6000);
 map.on('dataloading', () => $('#load').classList.add('on')); map.on('idle', () => $('#load').classList.remove('on'));
+
+// ---------- الدقة الفعلية للصورة وأدق إصدار في أرشيف Wayback (خدمة بيانات Esri) ----------
+const mcache = new Map();
+const metaBase = (m) => `https://metadata.maptiles.arcgis.com/arcgis/rest/services/${m}/MapServer`;
+async function metaAt(m, lon, lat, z, signal) {
+  const key = `${m}|${lon.toFixed(4)},${lat.toFixed(4)}|${z}`;
+  if (mcache.has(key)) return mcache.get(key);
+  const r = await fetch(metaQueryUrl(metaBase(m), lon, lat, z), { signal });
+  if (!r.ok) throw new Error('meta');
+  const v = parseMeta(await r.json());
+  if (mcache.size > 600) mcache.clear();
+  mcache.set(key, v);
+  return v;
+}
+let mt, mAbort, scan;
+async function showMeta() {
+  const el = $('#imeta'), k = S.layer, z = Math.round(map.getZoom() + 1);
+  const it = k === 'esri' ? wb[0] : k.startsWith('wb:') ? wb.find((x) => 'wb:' + x.n === k) : null;
+  if (!it?.m || z < 10) { el.textContent = ''; S.nativeRes = null; hint(); return; }
+  mAbort?.abort(); mAbort = new AbortController();
+  const c = map.getCenter();
+  try {
+    const v = await metaAt(it.m, c.lng, c.lat, z, mAbort.signal);
+    el.textContent = metaLine(v) + (v && k === 'esri' ? ' (أحدث إصدار Esri)' : '');
+    S.nativeRes = v?.res ?? null; hint();
+  } catch (e) { if (e.name !== 'AbortError') { el.textContent = ''; S.nativeRes = null; hint(); } }
+}
+const scheduleMeta = () => { clearTimeout(mt); mt = setTimeout(showMeta, 600); };
+map.on('moveend', scheduleMeta); map.once('idle', scheduleMeta);
+
+// يفحص كل إصدارات الأرشيف عند مركز الخريطة ويعرض الأدق (أصغر متر/بكسل) ثم الأحدث
+async function findBest() {
+  const items = wb.filter((x) => x.m), box = $('#best'), c = map.getCenter();
+  if (!items.length) { box.replaceChildren(h('div', { class: 'none warn' }, 'قائمة الأرشيف غير متاحة الآن.')); return; }
+  scan?.abort(); const sc = (scan = new AbortController());
+  const rows = [], st = h('div', { class: 'none' }, 'جارٍ فحص إصدارات الأرشيف…');
+  box.replaceChildren(st);
+  let i = 0, done = 0;
+  const work = async () => {
+    while (i < items.length && !sc.signal.aborted) {
+      const it = items[i++];
+      try { const v = await metaAt(it.m, c.lng, c.lat, 19, sc.signal); if (v) rows.push({ ...v, n: it.n, rel: it.d }); } catch { /* نتجاوز إصدارًا تعذّر فحصه */ }
+      if (++done % 8 === 0) st.textContent = `جارٍ فحص إصدارات الأرشيف ${done}/${items.length}`;
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, work));
+  if (sc.signal.aborted) return;
+  const top = rankBest(rows).slice(0, 6);
+  let cur = null; try { cur = await metaAt(items[0].m, c.lng, c.lat, 19, sc.signal); } catch { /* اختياري */ }
+  const finer = (r) => cur?.res != null && r.res != null && r.res < cur.res * 0.95;
+  box.replaceChildren(h('div', { class: 'sum' }, bestSummary(top, cur)), ...top.map((r) => h('button', { type: 'button', class: finer(r) ? 'better' : '', onclick: () => setSrc('wb:' + r.n) },
+    `${fmtRes(r.res)} · ${bidi([r.provider, r.sensor].filter(Boolean).join(' ') || 'مصدر غير معروف')} · ${r.date ? isoDate(r.date) : 'بلا تاريخ'} · إصدار ${isoDate(r.rel)}`)));
+}
+$('#bestbtn').onclick = findBest;
+if (!wb.some((x) => x.m)) $('#bestbtn').hidden = true;
+
+// ---------- صور مفتوحة (OpenAerialMap وVantor Open Data): تُعرض فقط إن كانت أدق من Esri أو بطلب المستخدم ----------
+async function stacSearch(q) {
+  const body = { collections: OPEN_COLLECTIONS, ...q };
+  let r;
+  try {
+    r = await fetch(`${OPEN_HOST}/stac/search`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(12000) });
+    if (!r.ok) throw new Error('post');
+  } catch {
+    r = await fetch(`${OPEN_HOST}/stac/search?${stacQuery(body)}`, { signal: AbortSignal.timeout(12000) });
+    if (!r.ok) throw new Error('get');
+  }
+  return ((await r.json()).features ?? []).map(parseOpenItem).filter(Boolean);
+}
+function useOpen(it) {
+  const key = 'oam:' + it.id, lat = it.bbox ? (it.bbox[1] + it.bbox[3]) / 2 : map.getCenter().lat;
+  const who = it.collection === 'vantor-opendata' ? 'Vantor Open Data' : 'OpenAerialMap/HOT';
+  oamSrc.set(key, { id: key, local: true, retina: true, maxZoom: it.gsd ? nativeZoom(it.gsd, lat) : 20, tileTemplate: openTileTemplate(it), bounds: it.bbox ?? undefined,
+    attribution: `${who} · ${it.license ?? 'CC BY 4.0'}${it.producer ? ' · ' + it.producer : ''}`, name: '🛩️ ' + it.title });
+  for (const sel of ['#src', '#srcB']) if (![...$(sel).options].some((o) => o.value === key)) $(sel).append(opt(key, '🛩️ ' + it.title.slice(0, 60)));
+  setSrc(key);
+}
+const openRow = (it, ref) => {
+  const v = verdict(it.gsd, ref);
+  return h('button', { type: 'button', class: v === 'better' ? 'better' : '', onclick: () => useOpen(it) },
+    [VERDICT_LABEL[v], it.gsd ? fmtRes(it.gsd) : null, it.kind === 'uav' ? 'درون' : 'قمر', it.date ? isoDate(it.date) : null, bidi(it.title)].filter(Boolean).join(' · '));
+};
+async function findOpen() {
+  const box = $('#oam'), b = map.getBounds();
+  if (map.getZoom() + 1 < 9) { box.replaceChildren(h('div', { class: 'none' }, 'قرّب الخريطة إلى مدينة أو موقع محدد أولًا (مستوى تقريب 9 فأكثر).')); return; }
+  box.replaceChildren(h('div', { class: 'none' }, 'جارٍ البحث في OpenAerialMap وVantor…'));
+  try {
+    const its = (await stacSearch({ bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((v) => +v.toFixed(5)), limit: 50 })).sort((x, y) => (x.gsd ?? 1e9) - (y.gsd ?? 1e9)).slice(0, 12);
+    const ref = S.nativeRes;
+    box.replaceChildren(...(its.length ? [h('div', { class: 'sum' }, ref ? `دقة Esri هنا ${fmtRes(ref)}. الأدق أولًا:` : 'الأدق أولًا:'), ...its.map((it) => openRow(it, ref))]
+      : [h('div', { class: 'none' }, 'لا توجد صور مفتوحة تغطي هذا العرض. قرّب إلى موقع محدد أو جرّب منطقة أخرى.')]));
+  } catch { box.replaceChildren(h('div', { class: 'none warn' }, 'تعذّر الوصول إلى فهرس الصور المفتوحة الآن.')); }
+}
+$('#oambtn').onclick = findOpen;
+
+// تنبيه عند وجود صورة أدق من Esri في مركز الخريطة، بزر «اعرضها» (لا يغيّر المصدر الافتراضي Esri من تلقاء نفسه):
+//  1) مصدر محلي في config/extra-imagery.json مُعلَّم "preferred": true (بلا أي طلب شبكي)
+//  2) صور OpenAerialMap/Vantor إن فعّل المستخدم «التنبيه» (استعلام بنقطة المركز فقط)
+const chip = $('#oamchip'), autoSeen = new Map();
+let autoT, autoLast = 0, autoSkip = 0, chipGo = null;
+const hideChip = () => { chip.hidden = true; chipGo = null; };
+const showChip = (text, go) => { chipGo = go; chip.querySelector('span').textContent = text; chip.hidden = false; };
+const inBox = (c, b) => c.lng >= b[0] && c.lng <= b[2] && c.lat >= b[1] && c.lat <= b[3];
+async function autoOpen() {
+  if (mOn || map.getZoom() + 1 < 15) return hideChip();
+  const c = map.getCenter();
+  const loc = extra.find((e) => e.preferred === true && Array.isArray(e.bounds) && e.bounds.length === 4 && inBox(c, e.bounds) && 'x:' + e.id !== S.layer);
+  if (loc) return showChip(`🟢 صورة أدق من Esri متاحة هنا: ${bidi(loc.title_ar)}`, () => setSrc('x:' + loc.id));
+  if (!S.auto) return hideChip();
+  if (Date.now() < autoSkip) return;
+  const key = `${c.lng.toFixed(3)},${c.lat.toFixed(3)}`;
+  let items = autoSeen.get(key);
+  if (!items) {
+    if (Date.now() - autoLast < 6000) return;
+    autoLast = Date.now();
+    try { items = await stacSearch({ intersects: { type: 'Point', coordinates: [+c.lng.toFixed(4), +c.lat.toFixed(4)] }, limit: 20 }); autoSeen.set(key, items); }
+    catch { autoSkip = Date.now() + 60000; return; }
+  }
+  const best = items.filter((it) => verdict(it.gsd, S.nativeRes) === 'better' && 'oam:' + it.id !== S.layer).sort((x, y) => x.gsd - y.gsd)[0];
+  if (!best) return hideChip();
+  showChip(`🟢 صورة مفتوحة أدق من Esri هنا: ${bidi(best.title)} (${fmtRes(best.gsd)})`, () => useOpen(best));
+}
+const scheduleAuto = () => { clearTimeout(autoT); autoT = setTimeout(autoOpen, 1200); };
+S.auto = lsGet('autoOpen') != null ? lsGet('autoOpen') === '1' : cfg?.openImagery?.autoDetect === true;
+$('#autoopen').checked = S.auto;
+$('#autoopen').onchange = (e) => { S.auto = e.target.checked; lsSet('autoOpen', S.auto ? '1' : '0'); scheduleAuto(); };
+$('#oamgo').onclick = () => { const g = chipGo; hideChip(); g?.(); };
+$('#oamx').onclick = hideChip;
+map.on('moveend', scheduleAuto);
+
+// ---------- أدوات: تضاريس 3D وقياس وحفظ صورة وتحسين الوضوح ----------
+function set3D(on) {
+  if (on && map2) cmpOff();
+  t3 = on; $('#t3d').setAttribute('aria-pressed', String(on));
+  if (on && !map.getSource('dem')) map.addSource('dem', { type: 'raster-dem', tiles: ['https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 15, attribution: 'Terrain: Mapzen/AWS Open Data' });
+  map.setTerrain(on ? { source: 'dem', exaggeration: 1.5 } : null);
+  on ? map.dragRotate.enable() : map.dragRotate.disable();
+  map.easeTo({ pitch: on ? 60 : 0, bearing: on ? map.getBearing() : 0, duration: 800 });
+}
+$('#t3d').onclick = () => set3D(!t3);
+
+let mp = [];
+function drawMeas() {
+  if (!map.getSource('meas')) {
+    map.addSource('meas', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({ id: 'meas-fill', type: 'fill', source: 'meas', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.25 } });
+    map.addLayer({ id: 'meas-line', type: 'line', source: 'meas', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#ffd166', 'line-width': 3 } });
+    map.addLayer({ id: 'meas-pt', type: 'circle', source: 'meas', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 5, 'circle-color': '#fff', 'circle-stroke-color': '#ef4444', 'circle-stroke-width': 2 } });
+  }
+  const f = mp.map((c) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: {} }));
+  if (mp.length > 1) f.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: mp.length > 2 ? [...mp, mp[0]] : mp }, properties: {} });
+  if (mp.length > 2) f.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[...mp, mp[0]]] }, properties: {} });
+  map.getSource('meas').setData({ type: 'FeatureCollection', features: f });
+  $('#mres span').textContent = mp.length < 2 ? 'انقر على الخريطة لإضافة نقاط' : `${mp.length > 2 ? 'المحيط' : 'المسافة'}: ${fmtLen(pathLength(mp, mp.length > 2))}${mp.length > 2 ? ` · المساحة: ${fmtArea(polygonArea(mp))}` : ''}`;
+}
+function setMeas(on) {
+  mOn = on; mp = [];
+  $('#meas').setAttribute('aria-pressed', String(on)); $('#mres').hidden = !on; map.getCanvas().style.cursor = on ? 'crosshair' : '';
+  if (on || map.getSource('meas')) drawMeas();
+  if (on && mobile()) sheet(false);
+}
+$('#meas').onclick = () => setMeas(!mOn);
+$('#mclr').onclick = () => { mp = []; drawMeas(); };
+map.on('click', (e) => { if (!mOn) return; mp.push([e.lngLat.lng, e.lngLat.lat]); drawMeas(); });
+
+$('#enh').onchange = (e) => {
+  S.enh = e.target.checked;
+  for (const [m, id] of [[map, 'img'], [map, 'img-under'], [map2, 'img2'], [map2, 'img2-under']]) if (m?.getLayer(id)) for (const [p, v] of Object.entries(ENH)) m.setPaintProperty(id, p, S.enh ? v : 0);
+};
+$('#shot').onclick = () => {
+  map.once('render', () => {
+    try {
+      const src = map.getCanvas(), cv = document.createElement('canvas'), k = devicePixelRatio || 1, d = srcDef(S.layer);
+      cv.width = src.width; cv.height = src.height;
+      const x = cv.getContext('2d');
+      x.drawImage(src, 0, 0);
+      x.fillStyle = 'rgba(0,0,0,.6)'; x.fillRect(0, cv.height - 26 * k, cv.width, 26 * k);
+      x.fillStyle = '#fff'; x.font = `${Math.round(12 * k)}px Tajawal, sans-serif`;
+      x.fillText(`${d.name} · ${$('#hud').textContent} · ${d.attribution ?? ESRI_ATTR} · © OpenStreetMap`, 10 * k, cv.height - 9 * k);
+      cv.toBlob((b) => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `iraq-sat-${Date.now()}.png`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); });
+    } catch { toast('تعذّر حفظ الصورة من هذا المتصفح.'); }
+  });
+  map.triggerRepaint();
+};
 
 info();
 refreshUI();

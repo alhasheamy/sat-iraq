@@ -6,7 +6,7 @@ import { validateAssistantOutput, parseDateSpec, sanitizeReply } from '../shared
 
 const cities = JSON.parse(fs.readFileSync(new URL('../config/cities.json', import.meta.url))).cities;
 const ctx = {
-  imageryIds: new Set(['viirs-noaa20', 'hls-s30']),
+  imageryIds: new Set(['esri', 'clarity']),
   overlayIds: new Set(['aerosol-aod', 'fires-noaa20']),
   placeIndex: buildPlaceIndex(cities),
   bbox: { west: 24, south: 12, east: 64, north: 42 },
@@ -61,9 +61,11 @@ test('مدخلات غير كائنية لا تكسر', () => {
   }
 });
 
-test('مقارنة قبل وبعد', () => {
-  const r = validateAssistantOutput({ actions: [{ type: 'compare', a: { layer: 'hls-s30', date: -10 }, b: { layer: 'hls-s30', date: 'latest' } }] }, ctx);
+test('مقارنة بين مصدرين من Esri، والمصادر المحذوفة تُرفض', () => {
+  const r = validateAssistantOutput({ actions: [{ type: 'compare', a: { layer: 'esri' }, b: { layer: 'clarity', date: 'latest' } }] }, ctx);
   assert.equal(r.actions[0].type, 'compare');
+  assert.equal(validateAssistantOutput({ actions: [{ type: 'set_layer', id: 'esri' }] }, ctx).actions.length, 1);
+  for (const gone of ['viirs-noaa20', 'modis-terra', 'hls-s30', 'eox']) assert.equal(validateAssistantOutput({ actions: [{ type: 'set_layer', id: gone }] }, ctx).actions.length, 0);
 });
 
 test('مخرجات خبيثة: حقن في حقول الأمر لا يمر', () => {
@@ -71,6 +73,6 @@ test('مخرجات خبيثة: حقن في حقول الأمر لا يمر', () 
     { type: 'toggle_overlay', id: 'aerosol-aod', on: 'yes' },
     { type: 'fly_to', place: '<script>alert(1)</script>', zoom: 99 },
     { type: '__proto__', id: 'x' },
-    { type: 'compare', a: { layer: 'hls-s30', date: '2026-10-17' }, b: { layer: 'nope', date: 'latest' } } ] }, ctx);
+    { type: 'compare', a: { layer: 'esri', date: '2026-10-17' }, b: { layer: 'nope', date: 'latest' } } ] }, ctx);
   assert.equal(r.actions.length, 0);
 });

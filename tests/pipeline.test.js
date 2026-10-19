@@ -19,22 +19,23 @@ test('خط الأنابيب الكامل', () => {
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const resolved = gen('layers.resolved.json');
   const by = Object.fromEntries(resolved.layers.map((l) => [l.id, l]));
-  assert.equal(by['viirs-noaa20'].status, 'ok');
-  assert.equal(by['viirs-noaa20'].matrixSet, 'GoogleMapsCompatible_Level9');
-  assert.equal(by['viirs-noaa20'].maxZoom, 9);
-  assert.match(by['viirs-noaa20'].tileTemplate, /\{time\}\/GoogleMapsCompatible_Level9\/\{z\}\/\{y\}\/\{x\}\.jpg$/);
-  assert.equal(by['viirs-noaa20'].latestDate, new Date().toISOString().slice(0, 10));
+  const ago = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+  // طبقة بيانات (غبار مُرصَد) تُحَلّ بالمعرّف الدقيق ويُعثر على أحدث بلاطة لها
+  assert.equal(by['aerosol-aod'].status, 'ok');
+  assert.equal(by['aerosol-aod'].matrixSet, 'GoogleMapsCompatible_Level6');
+  assert.equal(by['aerosol-aod'].maxZoom, 6);
+  assert.match(by['aerosol-aod'].tileTemplate, /\{time\}\/GoogleMapsCompatible_Level6\/\{z\}\/\{y\}\/\{x\}\.png$/);
+  assert.equal(by['aerosol-aod'].latestDate, ago(1));
   // طبقة غابت عن Capabilities تُعلَّم غير متاحة ولا يفشل النشر
-  assert.equal(by['viirs-noaa21'].status, 'unavailable');
+  assert.equal(by['lst-day'].status, 'unavailable');
   // الإيجاد بالبادئة عندما يختلف المعرّف الدقيق
-  assert.equal(by['hls-s30'].status, 'ok');
-  assert.equal(by['hls-s30'].gibsIdResolved, 'HLS_S30_Nadir_BRDF_Adjusted_Reflectance_v2');
-  assert.match(by['hls-s30'].resolvedVia, /^prefix:/);
-  // MODIS Terra: أحدث بلاطة قبل يومين فيمشي الفحص للخلف
-  assert.equal(by['modis-terra'].status, 'ok');
-  // خلفية EOX تتراجع من 2025 (404) إلى 2024
-  assert.equal(resolved.base.eox.year, '2024');
-  assert.match(resolved.base.eox.attribution, /Copernicus Sentinel data 2024/);
+  assert.equal(by['fires-noaa20'].status, 'ok');
+  assert.equal(by['fires-noaa20'].gibsIdResolved, 'VIIRS_NOAA20_Thermal_Anomalies_375m_Day');
+  assert.match(by['fires-noaa20'].resolvedVia, /^prefix:/);
+  // لا صور أساسية غير Esri في الناتج: لا خلفية EOX ولا Sentinel ولا صور VIIRS/MODIS الحقيقية
+  assert.equal(resolved.base, undefined);
+  assert.equal(resolved.sentinel2, undefined);
+  assert.ok(resolved.layers.length > 0 && resolved.layers.every((l) => l.kind === 'overlay'));
 
   r = run('scripts/fetch-weather.mjs');
   assert.equal(r.status, 0, r.stderr + r.stdout);

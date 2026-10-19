@@ -1,4 +1,4 @@
-// خوادم وهمية للاختبار دون إنترنت (GIBS وEOX وOpen-Meteo). تُحمَّل بـ: node --import ./tests/mocks.mjs ...
+// خوادم وهمية للاختبار دون إنترنت (GIBS وOpen-Meteo). تُحمَّل بـ: node --import ./tests/mocks.mjs ...
 const realFetch = globalThis.fetch;
 const today = new Date();
 const isoDaysAgo = (n) => new Date(today.getTime() - n * 864e5).toISOString().slice(0, 10);
@@ -12,10 +12,8 @@ const layerXml = (id, fmt, tms, def, ranges) => `<Layer><ows:Title xml:lang='en'
 <ResourceURL format='text/xml' template='https://gibs.earthdata.nasa.gov/x/{BBOX}.xml' resourceType='Domains'/></Layer>`;
 
 const CAPS = `<Capabilities xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' version='1.0.0' xmlns:xlink='http://www.w3.org/1999/xlink' xmlns='http://www.opengis.net/wmts/1.0' xmlns:ows='http://www.opengis.net/ows/1.1'><Contents>
-${layerXml('VIIRS_NOAA20_CorrectedReflectance_TrueColor', 'image/jpeg', 'GoogleMapsCompatible_Level9', isoDaysAgo(0), [`2018-01-01/${isoDaysAgo(0)}/P1D`])}
-${layerXml('MODIS_Terra_CorrectedReflectance_TrueColor', 'image/jpeg', 'GoogleMapsCompatible_Level9', isoDaysAgo(1), [`2000-02-24/${isoDaysAgo(1)}/P1D`])}
-${layerXml('HLS_S30_Nadir_BRDF_Adjusted_Reflectance_v2', 'image/png', 'GoogleMapsCompatible_Level12', isoDaysAgo(2), [`2021-01-01/${isoDaysAgo(2)}/P1D`])}
 ${layerXml('MODIS_Combined_Value_Added_AOD', 'image/png', 'GoogleMapsCompatible_Level6', isoDaysAgo(1), [`2002-07-04/${isoDaysAgo(1)}/P1D`])}
+${layerXml('VIIRS_NOAA20_Thermal_Anomalies_375m_Day', 'image/png', 'GoogleMapsCompatible_Level9', isoDaysAgo(0), [`2018-01-01/${isoDaysAgo(0)}/P1D`])}
 </Contents></Capabilities>`;
 
 globalThis.fetch = async (url, opts) => {
@@ -25,9 +23,6 @@ globalThis.fetch = async (url, opts) => {
     const m = u.pathname.match(/\/best\/([^/]+)\/default\/(\d{4}-\d{2}-\d{2})\//);
     if (m) return new Response(Buffer.alloc(m[2] >= isoDaysAgo(2) ? 3000 : 200), { status: 200 });
     return new Response('', { status: 404 });
-  }
-  if (u.hostname === 'tiles.maps.eox.at') {
-    return u.pathname.includes('s2cloudless-2024') ? new Response(Buffer.alloc(5000), { status: 200 }) : new Response('', { status: 404 });
   }
   if (/open-meteo\.com$/.test(u.hostname)) {
     const lats = u.searchParams.get('latitude').split(',').map(Number);

@@ -2,6 +2,7 @@
 //   data/layers.resolved.json  (ما تقرؤه الواجهة: قوالب بلاطات صحيحة وأحدث تاريخ متاح)
 //   data/status.json           (حالة كل طبقة)
 // لا يُفشل النشر إن غابت طبقة؛ يعلّمها unavailable لتُخفى في الواجهة.
+// صور القاعدة (Esri) ليست من GIBS فتُتجاهل هنا (كل ما بلا gibsId). لا خلفية EOX ولا أي صور أقمار أقل دقة.
 // يفشل فقط إن تعذّر الوصول إلى GIBS كليًا ولا توجد نسخة سابقة.
 
 import { XMLParser } from 'fast-xml-parser';
@@ -75,19 +76,6 @@ async function probeLatest(resource, tms, capDefault) {
   return null;
 }
 
-async function resolveEox() {
-  const b = cfg.base.eox;
-  for (const tpl of b.candidates) {
-    const url = tpl.replace('{z}', b.probeTile.z).replace('{y}', b.probeTile.y).replace('{x}', b.probeTile.x);
-    const r = await fetchRetry(url, { tries: 2, timeoutMs: 20000, asBuffer: true });
-    if (r.ok && r.data.length > 2000) {
-      const year = (tpl.match(/s2cloudless-(\d{4})/) || [])[1];
-      return { template: tpl, ok: true, year, attribution: b.attribution.replace('{year}', year) };
-    }
-  }
-  return { template: null, ok: false };
-}
-
 async function loadCapabilities() {
   const r = await fetchRetry(cfg.gibs.capabilities, { tries: 3, timeoutMs: 120000 });
   return r.ok ? parseCapabilities(r.data) : null;
@@ -110,7 +98,7 @@ async function main() {
 
   const resolved = [];
   const rows = ['| الطبقة | المعرّف | الحالة | مجموعة المصفوفة | الصيغة | أحدث تاريخ |', '|---|---|---|---|---|---|'];
-  for (const L of cfg.layers) {
+  for (const L of cfg.layers.filter((x) => x.gibsId)) {
     const found = findLayer(caps, L);
     if (!found) {
       resolved.push({ ...L, status: 'unavailable', reason: 'المعرّف غير موجود في GetCapabilities' });
@@ -148,15 +136,10 @@ async function main() {
     rows.push(`| ${L.title_ar} | ${cap.id}${via === 'exact' ? '' : ' (بالبادئة)'} | ${status === 'ok' ? '✅' : '⚠️ لا بلاطة حديثة'} | ${tms} | ${res.format} | ${latest ?? '-'} |`);
   }
 
-  const eox = await resolveEox();
-  rows.push(`| خلفية EOX | s2cloudless | ${eox.ok ? '✅' : '❌'} | - | jpeg | ${eox.year ?? '-'} |`);
-
   const generatedAt = new Date().toISOString();
   writeGen('layers.resolved.json', {
     version: 1,
     generatedAt,
-    base: { eox: { ok: eox.ok, template: eox.template, year: eox.year ?? null, attribution: eox.attribution ?? null, license: cfg.base.eox.license } },
-    sentinel2: cfg.sentinel2,
     layers: resolved
   });
   writeGen('status.json', {

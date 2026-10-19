@@ -12,6 +12,8 @@
 <meta property="og:title" content="أقمار العراق">
 <meta property="og:description" content="صور أقمار صناعية عالية الدقة والطقس والغبار للعراق.">
 <meta property="og:image" content="/icons/icon-512.png">
+<link rel="preconnect" href="https://server.arcgisonline.com" crossorigin>
+<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -34,6 +36,8 @@
 <div id="load" aria-hidden="true"></div>
 <div id="hud" title="انقر لنسخ رابط هذا الموقع" role="button" tabindex="0"></div>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="mres" hidden><span></span><button id="mclr" type="button">مسح</button></div>
+<div id="oamchip" hidden role="status"><span></span><button id="oamgo" type="button">اعرضها</button><button id="oamx" type="button" aria-label="إخفاء">✕</button></div>
 <header id="bar">
   <button id="menu" aria-label="القائمة">☰</button>
   <b class="brand">أقمار العراق</b>
@@ -49,15 +53,25 @@
     <h3>مصدر الصورة</h3>
     <select id="src" aria-label="مصدر الصورة"></select>
     <select id="wbsel" hidden aria-label="إصدار أرشيف Wayback"></select>
-    <div class="row wrap"><button id="today">🛰️ صورة القمر اليوم</button><button id="cmpbtn" aria-pressed="false">⇆ مقارنة</button><button id="install" hidden>⬇ تثبيت التطبيق</button></div>
+    <div class="row wrap"><button id="cmpbtn" aria-pressed="false">⇆ مقارنة</button><button id="install" hidden>⬇ تثبيت التطبيق</button></div>
     <div id="cmpbox" hidden><label>قارن مع (الجهة اليمنى)<select id="srcB"></select></label></div>
     <label class="chk"><input id="sharp" type="checkbox" checked autocomplete="off"> أعلى وضوح (بلاطات أدق، بيانات أكثر)</label>
     <div id="srcinfo" class="hint"></div>
-    <div class="hint">صور Esri/Maxar هي الأدق المتاحة مجانًا للعراق (حتى ~0.3–0.5 م في المدن) وليست صور اليوم. «صورة القمر اليوم» منخفضة الدقة (250 م) لكنها حديثة.</div>
+    <div id="imeta" class="hint"></div>
+    <div class="row wrap"><button id="bestbtn" type="button" title="يفحص كل إصدارات أرشيف Esri في هذا الموقع ويرتّبها بالأدق">🎯 أدق صورة هنا</button><button id="oambtn" type="button" title="يبحث في OpenAerialMap وVantor عن صور درون أو أقمار مفتوحة تغطي العرض الحالي">🛩️ صور مفتوحة هنا</button></div>
+    <div id="best" class="res"></div><div id="oam" class="res"></div>
+    <div class="hint">كل الصور هنا من Esri/Maxar، وهي الأدق المتاحة مجانًا للعراق (حتى ~0.3–0.5 م في المدن) وليست صور اليوم. لا يعرض الموقع أي صور أقل دقة منها.</div>
     <div id="zhint" class="hint warn"></div>
   </section>
   <section>
-    <h3>التاريخ (للطبقات الإضافية وصورة اليوم)</h3>
+    <h3>أدوات</h3>
+    <div class="row"><button id="t3d" type="button" aria-pressed="false" title="تضاريس ثلاثية الأبعاد: اسحب بالزر الأيمن أو بإصبعين لإمالة الخريطة">⛰️ 3D</button><button id="meas" type="button" aria-pressed="false" title="قياس مسافة ومساحة: انقر نقاطًا على الخريطة (Esc للإنهاء)">📏 قياس</button><button id="shot" type="button" title="حفظ المشهد الحالي كصورة PNG مع نسب المصادر">📷 حفظ</button></div>
+    <label class="chk"><input id="enh" type="checkbox" autocomplete="off"> تحسين الوضوح (تباين وتشبّع فقط، لا يضيف تفاصيل)</label>
+    <label class="chk"><input id="autoopen" type="checkbox" autocomplete="off"> تنبيه عند وجود صورة مفتوحة أدق من Esri</label>
+    <div class="hint">التنبيه يرسل مركز الخريطة إلى OpenAerialMap أثناء التصفح (مستوى 15 فأكثر). مُعطَّل افتراضيًا.</div>
+  </section>
+  <section>
+    <h3>التاريخ (للطبقات الإضافية)</h3>
     <div class="row">
       <button id="prev" title="اليوم السابق">›</button>
       <input id="date" type="date" aria-label="التاريخ">
@@ -85,8 +99,8 @@
   </section>
   <footer>
     <div id="fresh"></div>
-    <p>صور: <a href="https://earthdata.nasa.gov/gibs" rel="noopener">NASA GIBS/ESDIS</a> · NASA HLS · بيانات <a href="https://www.copernicus.eu" rel="noopener">Copernicus</a> Sentinel · <span id="eox"></span></p>
-    <p>الصور عالية الدقة وأرشيفها: Esri World Imagery (Clarity وWayback) · Esri, Maxar, Earthstar Geographics, and the GIS User Community. البحث: Photon/Nominatim © OpenStreetMap.</p>
+    <p>الصور: Esri World Imagery وClarity وWayback · Esri, Maxar, Earthstar Geographics, and the GIS User Community. طبقات الغبار والحرارة والنبات: <a href="https://earthdata.nasa.gov/gibs" rel="noopener">NASA GIBS/ESDIS</a>. الأسماء والطرق: OpenFreeMap © OpenMapTiles، بيانات OpenStreetMap.</p>
+    <p>البحث: Photon/Nominatim © OpenStreetMap. التضاريس: Mapzen/AWS Terrain Tiles. الصور المفتوحة (عند طلبها فقط): <a href="https://imagery.hotosm.org" rel="noopener">OpenAerialMap/HOT</a> (CC BY 4.0) وVantor Open Data (CC BY-NC 4.0)؛ يُرسَل مركز الخريطة إلى فهرسها عند الضغط على «صور مفتوحة هنا» أو إن فعّلت التنبيه التلقائي.</p>
     <p>بيانات الطقس من <a href="https://open-meteo.com" rel="noopener">Open-Meteo.com</a> (CC BY 4.0) · <a href="https://earthquake.usgs.gov" rel="noopener">USGS</a></p>
     <p>الموقع مجاني وغير ربحي.</p>
   </footer>

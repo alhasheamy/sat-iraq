@@ -31,5 +31,8 @@
   "gridMaxAgeHours": 5.5,
   "airMaxAgeHours": 5.5,
   "citiesMaxAgeHours": 2.5
+ },
+ "openImagery": {
+  "autoDetect": false
  }
 }

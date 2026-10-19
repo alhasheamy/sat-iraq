@@ -37,7 +37,6 @@ async function layers() {
       const st = { ok: ['جاهزة', 'ok'], no_recent_tile: ['لا بلاطة حديثة', 'warn'], unavailable: ['غير متاحة', 'bad'] }[x.status] || [x.status, ''];
       tr.append(el('td', st[1], st[0]), el('td', '', x.latestDate || '—')); tb.append(tr);
     }
-    const e = l.base && l.base.eox; const tr = el('tr'); tr.append(el('td', '', 'خلفية Sentinel-2 (EOX)'), el('td', '', '10 م'), el('td', e && e.ok ? 'ok' : 'bad', e && e.ok ? 'جاهزة (' + e.year + ')' : 'غير متاحة'), el('td', '', e && e.year ? 'سنوية' : '—')); tb.append(tr);
   } catch (e) { const tr = el('tr'); const td = el('td', 'bad', e.message); td.colSpan = 4; tr.append(td); tb.append(tr); }
 }
 

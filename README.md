@@ -2,7 +2,7 @@
 
 مجانية بالكامل · بلا إعلانات · بلا حسابات · تحديث تلقائي كل 3 ساعات.
 
-- **الصور:** يقرؤها المتصفح مباشرة من NASA GIBS (VIIRS/MODIS بدقة 250 م، وHLS بدقة 30 م) ومن Sentinel-2 على AWS (10 م عند الطلب). لا نخزّن صورًا.
+- **الصور:** كلها من Esri (World Imagery افتراضيًا، وClarity، وأرشيف Wayback) يقرؤها المتصفح مباشرة ولا نخزّن صورًا. لا يعرض الموقع صور أقمار أقل دقة منها (Sentinel وVIIRS وMODIS وHLS محذوفة). طبقات NASA GIBS (غبار، حرارة، نبات، حرائق) بيانات فقط. صور الدرون أو الأقمار الأدق تُضاف عبر `config/extra-imagery.json` أو تُكتشف من OpenAerialMap (انظر `docs/IMAGERY-RESEARCH.md`).
 - **الطقس والغبار:** سكربت مجدول (GitHub Actions) يجلب Open-Meteo ويكتب ملفات JSON ثابتة تُنشر مع الموقع.
 - **المساعد الذكي:** دالة واحدة على Cloudflare Pages تستدعي `gpt-oss-20b` عبر Workers AI، وتُرجع أوامر محددة مسبقًا فقط بعد تحقق صارم.
 - **الاستضافة:** Cloudflare Pages (مجاني) + GitHub Actions (مجاني للمستودعات العامة).
@@ -38,5 +38,5 @@ npm run all         # يجلب البيانات ويبني dist/
 
 ## الإسناد
 
-NASA GIBS/ESDIS · NASA HLS · بيانات Copernicus Sentinel · EOxCloudless (CC BY-NC-SA 4.0، غير تجاري) · Open-Meteo.com (CC BY 4.0) · USGS.
+Esri, Maxar, Earthstar Geographics, and the GIS User Community · NASA GIBS/ESDIS (طبقات البيانات) · Open-Meteo.com (CC BY 4.0) · USGS · OpenAerialMap/HOT وVantor Open Data (عند طلبها فقط).
 الموقع غير ربحي ولا يعرض إعلانات.

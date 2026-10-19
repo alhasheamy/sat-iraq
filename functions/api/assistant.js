@@ -120,7 +120,7 @@ function sanitizeState(s) {
 }
 
 function buildSystemPrompt(todayISO, state) {
-  const imagery = layersCfg.layers.filter((l) => l.kind === 'imagery').map((l) => `${l.id} (${l.title_ar}, ${l.resolution_m}m)`);
+  const imagery = layersCfg.layers.filter((l) => l.kind === 'imagery').map((l) => `${l.id} (${l.title_ar})`);
   const overlays = layersCfg.layers.filter((l) => l.kind === 'overlay').map((l) => `${l.id} (${l.title_ar})`);
   return [
     'You control a satellite imagery and weather web map for Iraq and the Middle East. Answer with ONE JSON object only. No markdown, no code fences, no extra text.',
@@ -135,7 +135,7 @@ function buildSystemPrompt(todayISO, state) {
     '{"type":"animate","days":2-7}',
     '{"type":"data_saver","on":true|false}',
     '{"type":"reset"}',
-    `Imagery ids: ${imagery.join('; ')}`,
+    `Imagery ids: ${imagery.join('; ')}. All imagery is Esri (archive, not today's photos); imagery has no date selection, so ignore "date" for imagery ids.`,
     `Overlay ids: ${overlays.join('; ')}`,
     'Weather overlays (wind, temperature, dust forecast, clouds, rain) are opened with open_weather or by fly_to and the user can toggle them; dust observed = aerosol-aod.',
     `Today (UTC): ${todayISO}. Coverage: lon ${appCfg.bbox.west}..${appCfg.bbox.east}, lat ${appCfg.bbox.south}..${appCfg.bbox.north}. Dates only within the last 90 days.`,

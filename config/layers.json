@@ -1,42 +1,16 @@
 {
   "version": 1,
-  "notes": "كتالوج الطبقات المقصود. المعرّفات تُتحقق من GetCapabilities الرسمي عند كل نشر (scripts/verify-layers.mjs) فتُصحَّح أو تُعلَّم unavailable. الواجهة تقرأ data/layers.resolved.json وليس هذا الملف.",
+  "notes": "كتالوج الطبقات. صور القاعدة من Esri فقط (esri افتراضي، وclarity، وأرشيف Wayback الذي تُجلب قائمته من scripts/fetch-wayback.mjs، وأي مصدر أدق تضيفه في config/extra-imagery.json). لا تضف هنا صور أقمار أقل دقة. طبقات GIBS كلها overlay (بيانات: غبار، حرارة، نبات، حرائق) ويُتحقق منها من GetCapabilities الرسمي عند كل نشر (scripts/verify-layers.mjs) فتُصحَّح أو تُعلَّم unavailable. الواجهة تقرأ data/layers.resolved.json وليس هذا الملف.",
   "gibs": {
     "capabilities": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/WMTSCapabilities.xml"
   },
   "probe": { "name": "بغداد", "lat": 33.3152, "lon": 44.3661, "zoom": 5, "minBytes": 1500, "maxDaysBack": 10 },
   "layers": [
-    { "id": "viirs-noaa20", "kind": "imagery", "tier": 1, "title_ar": "VIIRS NOAA-20 (الأحدث)", "gibsId": "VIIRS_NOAA20_CorrectedReflectance_TrueColor", "preferFormat": "jpeg", "resolution_m": 250, "latency": "ساعات", "probe": true, "dataSaverMaxZoom": 7 },
-    { "id": "viirs-noaa21", "kind": "imagery", "tier": 1, "title_ar": "VIIRS NOAA-21 (الأحدث)", "gibsId": "VIIRS_NOAA21_CorrectedReflectance_TrueColor", "preferFormat": "jpeg", "resolution_m": 250, "latency": "ساعات", "probe": true, "dataSaverMaxZoom": 7 },
-    { "id": "viirs-snpp", "kind": "imagery", "tier": 1, "title_ar": "VIIRS Suomi-NPP", "gibsId": "VIIRS_SNPP_CorrectedReflectance_TrueColor", "preferFormat": "jpeg", "resolution_m": 250, "latency": "ساعات", "probe": true, "dataSaverMaxZoom": 7 },
-    { "id": "modis-terra", "kind": "imagery", "tier": 2, "title_ar": "MODIS Terra (يومي)", "gibsId": "MODIS_Terra_CorrectedReflectance_TrueColor", "preferFormat": "jpeg", "resolution_m": 250, "latency": "ساعات", "probe": true, "dataSaverMaxZoom": 7 },
-    { "id": "modis-aqua", "kind": "imagery", "tier": 2, "title_ar": "MODIS Aqua (يومي)", "gibsId": "MODIS_Aqua_CorrectedReflectance_TrueColor", "preferFormat": "jpeg", "resolution_m": 250, "latency": "ساعات", "probe": true, "dataSaverMaxZoom": 7 },
-    { "id": "hls-s30", "kind": "imagery", "tier": 3, "title_ar": "HLS Sentinel-2 (30 م)", "gibsId": "HLS_S30_Nadir_BRDF_Adjusted_Reflectance", "gibsPrefix": "HLS_S30", "preferFormat": "png", "resolution_m": 30, "latency": "من يومين إلى 4 أيام", "probe": false, "patchy": true, "dataSaverMaxZoom": 10 },
-    { "id": "hls-l30", "kind": "imagery", "tier": 3, "title_ar": "HLS Landsat 8/9 (30 م)", "gibsId": "HLS_L30_Nadir_BRDF_Adjusted_Reflectance", "gibsPrefix": "HLS_L30", "preferFormat": "png", "resolution_m": 30, "latency": "من يومين إلى 4 أيام", "probe": false, "patchy": true, "dataSaverMaxZoom": 10 },
+    { "id": "esri", "kind": "imagery", "provider": "esri", "title_ar": "Esri World Imagery (الافتراضي)" },
+    { "id": "clarity", "kind": "imagery", "provider": "esri", "title_ar": "Esri Clarity" },
     { "id": "aerosol-aod", "kind": "overlay", "title_ar": "غبار مُرصَد (عمق الهباء)", "gibsId": "MODIS_Combined_Value_Added_AOD", "gibsPrefix": "MODIS_Combined_Value_Added_AOD", "preferFormat": "png", "probe": true },
     { "id": "fires-noaa20", "kind": "overlay", "title_ar": "حرائق (VIIRS 375 م)", "gibsId": "VIIRS_NOAA20_Thermal_Anomalies_375m_All", "gibsPrefix": "VIIRS_NOAA20_Thermal_Anomalies_375m", "preferFormat": "png", "probe": true },
     { "id": "lst-day", "kind": "overlay", "title_ar": "حرارة سطح الأرض (نهارًا)", "gibsId": "MODIS_Terra_Land_Surface_Temp_Day", "preferFormat": "png", "probe": true },
     { "id": "ndvi-8day", "kind": "overlay", "title_ar": "الغطاء النباتي NDVI (8 أيام)", "gibsId": "MODIS_Terra_NDVI_8Day", "preferFormat": "png", "probe": false }
-  ],
-  "base": {
-    "eox": {
-      "title_ar": "خلفية Sentinel-2 بلا غيوم (10 م)",
-      "candidates": [
-        "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/g/{z}/{y}/{x}.jpg",
-        "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg",
-        "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg"
-      ],
-      "probeTile": { "z": 6, "x": 39, "y": 25 },
-      "license": "CC BY-NC-SA 4.0 (بيانات 2018-2025): مجانية للاستخدام غير التجاري مع نسب إلزامي",
-      "attribution": "EOxCloudless https://cloudless.eox.at by EOX IT Services GmbH (Contains modified Copernicus Sentinel data {year})"
-    }
-  },
-  "sentinel2": {
-    "stac": "https://earth-search.aws.element84.com/v1",
-    "collection": "sentinel-2-l2a",
-    "collectionNote": "ملفات هذه المجموعة في دلو sentinel-cogs (مفعّل فيه CORS بحسب مشروع عارض COG عامّ). لا تستخدم sentinel-2-c1-l2a قبل اختبار CORS لدلوها بنفسك.",
-    "asset": "visual",
-    "maxCloudCover": 30,
-    "daysBack": 15
-  }
+  ]
 }
