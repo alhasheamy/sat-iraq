@@ -36,7 +36,11 @@
 <div id="load" aria-hidden="true"></div>
 <div id="hud" title="انقر لنسخ رابط هذا الموقع" role="button" tabindex="0"></div>
 <div id="toast" role="status" aria-live="polite"></div>
-<div id="mres" hidden><span></span><button id="mclr" type="button">مسح</button></div>
+<div id="mres" hidden role="status" aria-live="polite">
+  <div id="mval"></div>
+  <div class="mbtns"><button id="mmode" type="button" aria-pressed="false" title="التبديل بين قياس مسافة ومساحة مضلع">▱ مساحة</button><button id="mundo" type="button" title="حذف آخر نقطة (Backspace)">↶ تراجع</button><button id="mcopy" type="button">نسخ</button><button id="mclr" type="button">مسح</button><button id="mend" type="button" title="Esc">إنهاء</button></div>
+  <div id="mnote"></div>
+</div>
 <div id="oamchip" hidden role="status"><span></span><button id="oamgo" type="button">اعرضها</button><button id="oamx" type="button" aria-label="إخفاء">✕</button></div>
 <header id="bar">
   <button id="menu" aria-label="القائمة">☰</button>
@@ -49,8 +53,8 @@
     <form id="geo" class="row" role="search"><input id="gq" type="search" maxlength="120" placeholder="ابحث عن أي مكان: حي الجامعة بغداد" autocomplete="off" aria-label="بحث عن مكان"><button>بحث</button></form>
     <div id="gres" role="listbox"></div>
   </section>
-  <section>
-    <h3>مصدر الصورة</h3>
+  <details class="sec" id="s-src" open>
+    <summary>مصدر الصورة</summary>
     <select id="src" aria-label="مصدر الصورة"></select>
     <select id="wbsel" hidden aria-label="إصدار أرشيف Wayback"></select>
     <div class="row wrap"><button id="cmpbtn" aria-pressed="false">⇆ مقارنة</button><button id="install" hidden>⬇ تثبيت التطبيق</button></div>
@@ -58,49 +62,67 @@
     <label class="chk"><input id="sharp" type="checkbox" checked autocomplete="off"> أعلى وضوح (بلاطات أدق، بيانات أكثر)</label>
     <div id="srcinfo" class="hint"></div>
     <div id="imeta" class="hint"></div>
-    <div class="row wrap"><button id="bestbtn" type="button" title="يفحص كل إصدارات أرشيف Esri في هذا الموقع ويرتّبها بالأدق">🎯 أدق صورة هنا</button><button id="oambtn" type="button" title="يبحث في OpenAerialMap وVantor عن صور درون أو أقمار مفتوحة تغطي العرض الحالي">🛩️ صور مفتوحة هنا</button></div>
+    <div class="row wrap"><button id="bestbtn" type="button" title="يفحص كل إصدارات أرشيف Esri في هذا الموقع ويرتّبها بالأدق">🎯 أدق صورة هنا</button><button id="oambtn" type="button" title="يبحث في OpenAerialMap عن صور درون أو أقمار مفتوحة تغطي العرض الحالي">🛩️ صور مفتوحة هنا</button></div>
+    <div class="row wrap"><button id="oamall" type="button" title="كل صور الدرون المفتوحة المسجّلة في العراق، مرتّبة بالأقرب إلى مركز الخريطة">📍 كل مواقع الدرون في العراق</button></div>
     <div id="best" class="res"></div><div id="oam" class="res"></div>
-    <div class="hint">كل الصور هنا من Esri/Maxar، وهي الأدق المتاحة مجانًا للعراق (حتى ~0.3–0.5 م في المدن) وليست صور اليوم. لا يعرض الموقع أي صور أقل دقة منها.</div>
+    <div class="hint">الصور الأساسية من Esri/Maxar، وهي الأدق المتاحة مجانًا كبلاطات للعراق (حتى ~0.3–0.5 م في المدن) وليست صور اليوم. الصور المفتوحة (درون بدقة 1–2 سم في مواقع محدودة) تُعرض فوقها عند اختيارك.</div>
     <div id="zhint" class="hint warn"></div>
-  </section>
-  <section>
-    <h3>أدوات</h3>
-    <div class="row"><button id="t3d" type="button" aria-pressed="false" title="تضاريس ثلاثية الأبعاد: اسحب بالزر الأيمن أو بإصبعين لإمالة الخريطة">⛰️ 3D</button><button id="meas" type="button" aria-pressed="false" title="قياس مسافة ومساحة: انقر نقاطًا على الخريطة (Esc للإنهاء)">📏 قياس</button><button id="shot" type="button" title="حفظ المشهد الحالي كصورة PNG مع نسب المصادر">📷 حفظ</button></div>
+  </details>
+  <details class="sec" id="s-photos" open>
+    <summary>📸 لقطات حقيقية على الخريطة</summary>
+    <div class="hint">صور التقطها الناس في أماكنها وبتواريخ مختلفة، تظهر عند موقع التقاطها.</div>
+    <label class="chk"><input id="photos" type="checkbox" autocomplete="off"> صور المعالم والأماكن (ويكيميديا كومنز، بلا مفتاح)</label>
+    <div id="mlyrow" hidden><label class="chk"><input id="mly" type="checkbox" autocomplete="off"> صور الشوارع (Mapillary)</label><div class="row"><button id="mlyclr" type="button">إزالة الرمز</button></div></div>
+    <div id="mlytokrow">
+      <div class="hint">لإظهار صور الشوارع (Mapillary) الصق «رمز العميل» المجاني <span dir="ltr">(MLY|…)</span> من <a href="https://www.mapillary.com/dashboard/developers" target="_blank" rel="noopener noreferrer">mapillary.com/dashboard/developers</a>. يُحفظ في متصفحك فقط.</div>
+      <div class="row"><input id="mlytok" type="text" dir="ltr" maxlength="140" placeholder="MLY|123456789|abcdef…" autocomplete="off" spellcheck="false" aria-label="رمز Mapillary"><button id="mlysave" type="button">حفظ</button></div>
+    </div>
+    <div id="phstat" class="hint" role="status"></div>
+  </details>
+  <details class="sec" id="s-tools" open>
+    <summary>أدوات</summary>
+    <div class="row"><button id="t3d" type="button" aria-pressed="false" title="تضاريس ومبانٍ ثلاثية الأبعاد: اسحب بالزر الأيمن أو بإصبعين لإمالة الخريطة">⛰️ 3D</button><button id="meas" type="button" aria-pressed="false" title="قياس مسافة ومساحة: انقر نقاطًا على الخريطة (Esc للإنهاء)">📏 قياس</button><button id="shot" type="button" title="حفظ المشهد الحالي كصورة PNG مع نسب المصادر">📷 حفظ</button></div>
+    <div id="d3opts" hidden>
+      <label class="chk"><input id="b3d" type="checkbox" checked autocomplete="off"> مباني ثلاثية الأبعاد (OpenStreetMap)</label>
+      <label class="rng">مبالغة التضاريس <output id="exagv">1.3×</output><input id="exag" type="range" min="1" max="3" step="0.1" value="1.3" aria-label="مبالغة التضاريس"></label>
+      <div class="hint">المباني ترتفع من بيانات OSM: الارتفاع الفعلي إن سُجّل وإلا افتراضي، فهي تقريبية وليست رسمًا دقيقًا لكل بيت. قرّب إلى مستوى الأحياء (15 فأكثر). اسحب بالزر الأيمن أو بإصبعين للتدوير والإمالة.</div>
+    </div>
     <label class="chk"><input id="enh" type="checkbox" autocomplete="off"> تحسين الوضوح (تباين وتشبّع فقط، لا يضيف تفاصيل)</label>
     <label class="chk"><input id="autoopen" type="checkbox" autocomplete="off"> تنبيه عند وجود صورة مفتوحة أدق من Esri</label>
-    <div class="hint">التنبيه يرسل مركز الخريطة إلى OpenAerialMap أثناء التصفح (مستوى 15 فأكثر). مُعطَّل افتراضيًا.</div>
-  </section>
-  <section>
-    <h3>التاريخ (للطبقات الإضافية)</h3>
+    <div class="hint">التنبيه يرسل نقطة مركز الخريطة إلى OpenAerialMap أثناء التصفح (مستوى 15 فأكثر). مُعطَّل افتراضيًا.</div>
+  </details>
+  <details class="sec" id="s-date">
+    <summary>التاريخ (للطبقات الإضافية)</summary>
     <div class="row">
       <button id="prev" title="اليوم السابق">›</button>
       <input id="date" type="date" aria-label="التاريخ">
       <button id="next" title="اليوم التالي">‹</button>
       <button id="latest">الأحدث</button><button id="anim" title="تحريك آخر 7 أيام">▶ 7 أيام</button>
     </div>
-  </section>
-  <section>
-    <h3>طبقات إضافية</h3>
+  </details>
+  <details class="sec" id="s-layers">
+    <summary>طبقات إضافية</summary>
     <div id="overlays"></div>
     <label class="chk"><input id="names" type="checkbox" checked autocomplete="off"> الأسماء والطرق والحدود</label>
     <label class="chk"><input id="wind" type="checkbox" autocomplete="off"> حركة الرياح</label>
     <label class="chk"><input id="saver" type="checkbox" autocomplete="off"> توفير البيانات</label>
-  </section>
-  <section>
-    <h3>المساعد</h3>
+  </details>
+  <details class="sec" id="s-ask">
+    <summary>المساعد</summary>
     <form id="ask" class="row"><input id="q" maxlength="200" placeholder="مثال: أرني البصرة، الغبار، أمس" autocomplete="off"><button>إرسال</button></form>
     <div id="log" class="hint" role="status"></div>
-  </section>
-  <section id="wx"><h3>الطقس</h3><div class="hint">انقر على مدينة أو أي نقطة في الخريطة.</div></section>
-  <section>
-    <h3>المدن</h3>
+  </details>
+  <details class="sec" id="wx" open><summary>الطقس</summary><div class="hint">انقر على مدينة أو أي نقطة في الخريطة.</div></details>
+  <details class="sec" id="s-cities">
+    <summary>المدن</summary>
     <div id="cities"></div>
     <div id="presets" class="row wrap"></div>
-  </section>
+  </details>
   <footer>
     <div id="fresh"></div>
-    <p>الصور: Esri World Imagery وClarity وWayback · Esri, Maxar, Earthstar Geographics, and the GIS User Community. طبقات الغبار والحرارة والنبات: <a href="https://earthdata.nasa.gov/gibs" rel="noopener">NASA GIBS/ESDIS</a>. الأسماء والطرق: OpenFreeMap © OpenMapTiles، بيانات OpenStreetMap.</p>
-    <p>البحث: Photon/Nominatim © OpenStreetMap. التضاريس: Mapzen/AWS Terrain Tiles. الصور المفتوحة (عند طلبها فقط): <a href="https://imagery.hotosm.org" rel="noopener">OpenAerialMap/HOT</a> (CC BY 4.0) وVantor Open Data (CC BY-NC 4.0)؛ يُرسَل مركز الخريطة إلى فهرسها عند الضغط على «صور مفتوحة هنا» أو إن فعّلت التنبيه التلقائي.</p>
+    <p>الصور: Esri World Imagery وClarity وWayback · Esri, Maxar, Earthstar Geographics, and the GIS User Community. طبقات الغبار والحرارة والنبات: <a href="https://earthdata.nasa.gov/gibs" rel="noopener">NASA GIBS/ESDIS</a>. الأسماء والطرق والمباني: OpenFreeMap © OpenMapTiles، بيانات OpenStreetMap.</p>
+    <p>البحث: Photon/Nominatim © OpenStreetMap. التضاريس: Mapzen/AWS Terrain Tiles وMapterhorn. الصور المفتوحة (عند طلبها فقط): <a href="https://openaerialmap.org" rel="noopener">OpenAerialMap/HOT</a> (CC BY 4.0)؛ يُرسَل مركز الخريطة إلى فهرسها عند الضغط على «صور مفتوحة هنا» أو إن فعّلت التنبيه التلقائي.</p>
+    <p>اللقطات الحقيقية: <a href="https://commons.wikimedia.org" rel="noopener">Wikimedia Commons</a> (تراخيص حرة، ويظهر ترخيص كل صورة ومصوّرها عند فتحها) وMapillary (CC BY-SA 4.0).</p>
     <p>بيانات الطقس من <a href="https://open-meteo.com" rel="noopener">Open-Meteo.com</a> (CC BY 4.0) · <a href="https://earthquake.usgs.gov" rel="noopener">USGS</a></p>
     <p>الموقع مجاني وغير ربحي.</p>
   </footer>

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   metaLayerId, metaQueryUrl, parseMeta, rankBest, fmtRes, metaLine, digitalZoom, bestSummary,
-  parseOpenItem, stacQuery, openTileTemplate, nativeZoom, verdict, OPEN_HOST, isoDate, bidi,
+  parseOamResult, parseOamResponse, validOamTiles, oamMetaUrl, oamViewerUrl, bboxCenter, tileOf, openTileTemplate, nativeZoom, verdict, OAM_API, IRAQ_BBOX, isoDate, bidi,
 } from '../shared/imagery.js';
 
 // نزيل عوازل الاتجاه (غير المرئية) لنقارن النص الظاهر
@@ -87,31 +87,52 @@ test('ملخص أدق لقطة في الأرشيف', () => {
   assert.match(bestSummary(top, null), /أدق لقطة في الأرشيف/);
 });
 
-test('عنصر STAC حقيقي الشكل: Vantor وOAM', () => {
-  const v = parseOpenItem({ id: 'B040001100E0F910', collection: 'vantor-opendata', bbox: [-105.36, 20.47, -105.14, 20.86],
-    properties: { gsd: 0.54, datetime: '2026-10-16T17:53:15.962339Z', license: 'CC-BY-NC-4.0', title: 'Mexico-Hurricane-Simon-Oct-2026 - [POST] Vantor WV03', 'oam:platform_type': 'satellite', 'oam:producer_name': 'Vantor' } });
-  assert.equal(v.gsd, 0.54); assert.equal(v.date, '2026-10-16'); assert.equal(v.kind, 'satellite'); assert.equal(v.license, 'CC-BY-NC-4.0'); assert.equal(v.producer, 'Vantor');
-  const o = parseOpenItem({ id: '122b15c6-91d1-47a0-814a-eae6fb89de1b', collection: 'openaerialmap', bbox: [-43.13, -22.93, -43.12, -22.92],
-    properties: { gsd: 0.09999999999999858, datetime: '2026-10-15T00:00:00Z', license: 'CC-BY-4.0', title: 'Niteroi 6923-74634', 'oam:platform_type': 'uav' } });
-  assert.equal(o.kind, 'uav'); assert.equal(o.bbox.length, 4);
+// عيّنة بشكل ما أعاده فهرس OAM الحي لموقع أثري عراقي (تل الأحمر الشرقي، 5 نوفمبر 2021)
+const OAM_SAMPLE = {
+  title: 'Tell AL-Ahmer east (تل الاحمر الشرقي)', license: 'CC-BY 4.0', gsd: 0.01011, platform: 'uav', provider: 'A.A.',
+  bbox: [44.129606, 32.57772, 44.131686, 32.579267], acquisition_start: '2021-11-05T21:26:00.000Z', acquisition_end: '2021-11-05T22:00:00.000Z',
+  properties: { tms: 'https://tiles.openaerialmap.org/69513e1b9ec18574a42c4163/0/69513e1b9ec18574a42c4164/{z}/{x}/{y}' },
+};
+
+test('نتيجة OAM حقيقية الشكل ← عنصر صغير آمن', () => {
+  const it = parseOamResult(OAM_SAMPLE);
+  assert.equal(it.id, '69513e1b9ec18574a42c4164');
+  assert.equal(it.gsd, 0.01011); assert.equal(it.kind, 'uav'); assert.equal(it.date, '2021-11-05'); assert.equal(it.license, 'CC-BY 4.0');
+  assert.equal(it.tiles, OAM_SAMPLE.properties.tms); assert.equal(openTileTemplate(it), it.tiles); assert.equal(it.bbox.length, 4);
+  assert.equal(it.producer, 'A.A.');
 });
 
-test('عناصر غير آمنة أو من مجموعات أخرى تُرفض، والنصوص تُنظَّف', () => {
-  assert.equal(parseOpenItem({ id: 'x', collection: 'evil' }), null);
-  assert.equal(parseOpenItem({ id: '../../etc', collection: 'openaerialmap' }), null);
-  assert.equal(parseOpenItem({ id: 'a/b', collection: 'openaerialmap' }), null);
-  assert.equal(parseOpenItem(null), null);
-  const t = parseOpenItem({ id: 'ok-1', collection: 'openaerialmap', properties: { title: '<img src=x onerror=alert(1)>\nمسح', gsd: -3, datetime: 'bad' }, bbox: [1, 2, 3] });
-  assert.ok(!/[<>]/.test(t.title)); assert.equal(t.gsd, null); assert.equal(t.date, null); assert.equal(t.bbox, null);
+test('استجابة /meta كاملة: التراخيص والعناصر غير الصالحة', () => {
+  const list = parseOamResponse({ meta: { license: 'CC-BY 4.0', found: 3 }, results: [
+    { ...OAM_SAMPLE, license: undefined },
+    { ...OAM_SAMPLE, properties: { tms: 'https://evil.example.com/a/0/b/{z}/{x}/{y}' } },
+    { ...OAM_SAMPLE, properties: {} },
+  ] });
+  assert.equal(list.length, 1); assert.equal(list[0].license, 'CC-BY 4.0');
+  assert.deepEqual(parseOamResponse(null), []); assert.deepEqual(parseOamResponse({ results: 'x' }), []);
 });
 
-test('استعلام STAC بصيغة GET وقالب البلاطات', () => {
-  const q = stacQuery({ collections: ['openaerialmap', 'vantor-opendata'], bbox: [44, 32, 45, 33], limit: 50 });
-  assert.match(q, /collections=openaerialmap%2Cvantor-opendata/); assert.match(q, /bbox=44%2C32%2C45%2C33/); assert.match(q, /limit=50/);
-  const p = stacQuery({ collections: ['openaerialmap'], intersects: { type: 'Point', coordinates: [44.4, 32.4] } });
-  assert.match(decodeURIComponent(p), /"type":"Point"/);
-  const tpl = openTileTemplate({ id: 'abc', collection: 'openaerialmap' });
-  assert.equal(tpl, `${OPEN_HOST}/raster/collections/openaerialmap/items/abc/tiles/WebMercatorQuad/{z}/{x}/{y}@1x?assets=visual`);
+test('قوالب البلاطات: نطاق OAM وhttps والمتغيرات الثلاثة فقط', () => {
+  const ok = 'https://tiles.openaerialmap.org/a1/0/b2/{z}/{x}/{y}';
+  assert.equal(validOamTiles(ok), ok);
+  for (const bad of ['http://tiles.openaerialmap.org/a/0/b/{z}/{x}/{y}', 'https://tiles.openaerialmap.org.evil.com/a/{z}/{x}/{y}', 'https://tiles.openaerialmap.org/a/{z}/{x}',
+    'https://tiles.openaerialmap.org/a/{z}/{x}/{y}" onerror="x', 'javascript:alert(1)', 'https://user@tiles.openaerialmap.org@evil.com/{z}/{x}/{y}', null, 42]) assert.equal(validOamTiles(bad), null, String(bad));
+});
+
+test('نصوص النتائج تُنظَّف والقيم السيئة تُهمل', () => {
+  const t = parseOamResult({ ...OAM_SAMPLE, title: '<img src=x onerror=alert(1)>\nمسح', gsd: -3, acquisition_end: 'bad', acquisition_start: undefined, bbox: [1, 2, 3], platform: 'satellite' });
+  assert.ok(!/[<>]/.test(t.title)); assert.equal(t.gsd, null); assert.equal(t.date, null); assert.equal(t.bbox, null); assert.equal(t.kind, 'satellite');
+  assert.equal(parseOamResult(null), null);
+});
+
+test('رابط الاستعلام والفحوص المساعدة', () => {
+  const u = new URL(oamMetaUrl(IRAQ_BBOX, 500));
+  assert.equal(u.origin, OAM_API); assert.equal(u.pathname, '/meta');
+  assert.equal(u.searchParams.get('bbox'), '38.8,29,48.6,37.4'); assert.equal(u.searchParams.get('limit'), '100'); assert.equal(u.searchParams.get('page'), '1');
+  assert.deepEqual(bboxCenter([44, 32, 46, 34]), [45, 33]);
+  assert.match(oamViewerUrl({ bbox: [44.129606, 32.57772, 44.131686, 32.579267] }), /^https:\/\/map\.openaerialmap\.org\/#\/44\.13065,32\.57849,18$/);
+  assert.deepEqual(tileOf(0, 0, 1), { x: 1, y: 1 });
+  assert.deepEqual(tileOf(44.421645, 32.462291, 18), { x: 163418, y: 106056 }); // نقطة لقطتك في الحلة (محسوبة سابقًا)
 });
 
 test('أعلى مستوى تقريب مفيد بحسب دقة الصورة', () => {

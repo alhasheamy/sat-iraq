@@ -5,8 +5,9 @@ import '@fontsource/tajawal/arabic-500.css';
 import '@fontsource/tajawal/arabic-700.css';
 import './style.css';
 import { buildPlaceIndex, findPlaceInText, normalizeArabic } from '../../shared/arabic.js';
-import { metaQueryUrl, parseMeta, rankBest, metaLine, digitalZoom, bestSummary, parseOpenItem, stacQuery, openTileTemplate, nativeZoom, verdict, VERDICT_LABEL, fmtRes, isoDate, bidi, OPEN_HOST, OPEN_COLLECTIONS } from '../../shared/imagery.js';
-import { pathLength, polygonArea, fmtLen, fmtArea } from '../../shared/measure.js';
+import { metaQueryUrl, parseMeta, rankBest, metaLine, digitalZoom, bestSummary, parseOamResponse, oamMetaUrl, oamViewerUrl, tileOf, bboxCenter, IRAQ_BBOX, openTileTemplate, nativeZoom, verdict, VERDICT_LABEL, fmtRes, isoDate, bidi } from '../../shared/imagery.js';
+import { pathLength, polygonArea, fmtLen, fmtArea, geodist, midpoint, precisionNote } from '../../shared/measure.js';
+import { initPhotos } from './photos.js';
 
 const $ = (s) => document.querySelector(s);
 const h = (t, a = {}, ...k) => {
@@ -31,7 +32,7 @@ const placeIdx = buildPlaceIndex(cities);
 const layers = (res?.layers ?? []).filter((l) => l.status !== 'unavailable');
 // طبقات GIBS هنا بيانات فقط (غبار/حرارة/نبات/حرائق). كل صور القاعدة من Esri (راجع srcDef).
 const overlays = layers.filter((l) => l.kind === 'overlay' && !/vector/i.test(l.format || ''));
-const S = { layer: 'esri', cmp: null, date: { mode: 'latest' }, ov: new Set(), saver: false, sharp: true, enh: false, auto: false, nativeRes: null };
+const S = { layer: 'esri', cmp: null, date: { mode: 'latest' }, ov: new Set(), saver: false, sharp: true, enh: false, auto: false, nativeRes: null, nativeAcc: null };
 const ENH = { 'raster-contrast': 0.12, 'raster-saturation': 0.08 }; // تحسين اختياري: تباين وتشبّع فقط، لا يضيف تفاصيل
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* التخزين محجوب */ } };
@@ -107,9 +108,14 @@ const VEC = [
   { ...place('p-suburb', 'suburb', 11, 18, zi(11, 11, 15, 14), '#e8f4ff'), filter: cls('suburb', 'quarter', 'neighbourhood', 'hamlet') },
   { id: 'road-n', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 12, layout: { ...TXT, 'symbol-placement': 'line', 'text-size': zi(12, 10, 18, 14) }, paint: HALO },
 ];
+// مباني ثلاثية الأبعاد من طبقة building في OpenMapTiles (OpenFreeMap): render_height محسوب من height أو building:levels وإلا افتراضي
+const B3D = { id: 'bld3d', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 14, layout: { visibility: 'none' }, filter: ['!=', ['get', 'hide_3d'], true],
+  paint: { 'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 5], 'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0], 'fill-extrusion-opacity': 0.85, 'fill-extrusion-vertical-gradient': true,
+    'fill-extrusion-color': ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 5], 0, '#f1f5f9', 15, '#dbe4ee', 40, '#b7c4d4', 100, '#8da0b8', 250, '#64748b'] } };
 function addVec() {
   map.addSource('omt', { type: 'vector', url: 'https://tiles.openfreemap.org/planet' });
   VEC.forEach((l) => map.addLayer(l));
+  map.addLayer(B3D, 'water-n'); // تحت النصوص كي لا تغطيها المباني
 }
 const setNames = (on) => [map, map2].forEach((m) => m && VEC.forEach((l) => m.getLayer(l.id) && m.setLayoutProperty(l.id, 'visibility', on ? 'visible' : 'none')));
 map.on('load', () => {
@@ -122,6 +128,7 @@ map.on('zoom', () => document.body.classList.toggle('far', map.getZoom() < 6.5))
 { let n = 0, t0 = 0, oamWarn = 0; // تنبيه واحد بدل سيل أخطاء عند تعذّر البلاطات
   map.on('error', (e) => {
     const st = e?.error?.status, now = Date.now();
+    if (e?.sourceId === 'dem' && st !== 404 && st !== 204 && demFailed()) return;
     if (st === 404 || st === 204) return;
     if (S.layer.startsWith('oam:') && st >= 400) { if (now - oamWarn > 15000) { oamWarn = now; toast('تعذّر تحميل بلاطات هذه الصورة المفتوحة. اختر Esri من قائمة المصدر.'); } return; }
     if (now - t0 > 10000) { t0 = now; n = 0; }
@@ -188,11 +195,12 @@ if (d) { $('#dust').textContent = `الغبار: ${LV[d.level] ?? d.level}${d.ci
 
 // ---------- الطقس ----------
 let pop;
+const wxSet = (...kids) => { const w = $('#wx'); w.open = true; w.replaceChildren(h('summary', {}, 'الطقس'), ...kids); };
 function renderWx(title, cur, day, text, at) {
   const [em, desc] = WMO(cur.weather_code ?? 0);
   const r = (v) => (typeof v === 'number' ? Math.round(v) : '–');
   const days = (day?.time ?? []).slice(0, 7).map((t, i) => h('div', {}, h('b', {}, new Intl.DateTimeFormat('ar', { weekday: 'short', timeZone: 'UTC' }).format(new Date(t + 'T00:00:00Z'))), WMO(day.code[i])[0], h('br'), `${r(day.tmax[i])}°`, h('br'), h('b', {}, `${r(day.tmin[i])}°`)));
-  $('#wx').replaceChildren(h('h3', {}, 'الطقس: ' + title),
+  wxSet(h('h3', {}, 'الطقس: ' + title),
     h('div', { class: 'now' }, h('span', { class: 'e' }, em), h('span', { class: 't' }, `${r(cur.temperature_2m)}°`),
       h('span', { class: 'hint' }, `${desc}\nمحسوسة ${r(cur.apparent_temperature)}° · رطوبة ${r(cur.relative_humidity_2m)}%\nرياح ${r(cur.wind_speed_10m)} م/ث`)),
     text ? h('div', { class: 'hint' }, text) : null, h('div', { class: 'days' }, days));
@@ -213,21 +221,21 @@ async function showPoint(lat, lon, title = 'الموقع المحدد') {
   const key = lat.toFixed(2) + ',' + lon.toFixed(2);
   let hit = cache.get(key);
   if (!hit || Date.now() - hit.t > 6e5) {
-    $('#wx').replaceChildren(h('h3', {}, 'الطقس'), h('div', { class: 'hint' }, 'جارٍ التحميل…'));
+    wxSet(h('div', { class: 'hint' }, 'جارٍ التحميل…'));
     try {
       const u = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&wind_speed_unit=ms&timezone=auto&forecast_days=7`;
       const r = await (await fetch(u)).json();
       hit = { t: Date.now(), cur: r.current, day: { time: r.daily.time, code: r.daily.weather_code, tmax: r.daily.temperature_2m_max, tmin: r.daily.temperature_2m_min } };
       if (!hit.cur) throw 0;
       cache.set(key, hit);
-    } catch { $('#wx').replaceChildren(h('h3', {}, 'الطقس'), h('div', { class: 'hint warn' }, 'تعذّر جلب الطقس لهذه النقطة الآن.')); return; }
+    } catch { wxSet(h('div', { class: 'hint warn' }, 'تعذّر جلب الطقس لهذه النقطة الآن.')); return; }
   }
   renderWx(title, hit.cur, hit.day, null, [lon, lat]);
 }
 const mobile = () => innerWidth <= 760;
 const sheet = (on) => document.body.classList.toggle('open', on);
 // على الجوال: النقر على الخريطة والقائمة مفتوحة يغلقها فقط، وإن كانت مغلقة يعرض طقس النقطة
-map.on('click', (e) => { if (mOn) return; if (mobile() && document.body.classList.contains('open')) return sheet(false); showPoint(e.lngLat.lat, e.lngLat.lng); });
+map.on('click', (e) => { if (mOn || photos?.hit(e)) return; if (mobile() && document.body.classList.contains('open')) return sheet(false); showPoint(e.lngLat.lat, e.lngLat.lng); });
 map.on('dragstart', () => mobile() && sheet(false));
 addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; sheet(false); if (mOn) setMeas(false); });
 // السحب للأسفل لإغلاق القائمة (من المقبض، أو من أعلى المحتوى)
@@ -454,14 +462,14 @@ let mt, mAbort, scan;
 async function showMeta() {
   const el = $('#imeta'), k = S.layer, z = Math.round(map.getZoom() + 1);
   const it = k === 'esri' ? wb[0] : k.startsWith('wb:') ? wb.find((x) => 'wb:' + x.n === k) : null;
-  if (!it?.m || z < 10) { el.textContent = ''; S.nativeRes = null; hint(); return; }
+  if (!it?.m || z < 10) { el.textContent = ''; S.nativeRes = null; S.nativeAcc = null; hint(); return; }
   mAbort?.abort(); mAbort = new AbortController();
   const c = map.getCenter();
   try {
     const v = await metaAt(it.m, c.lng, c.lat, z, mAbort.signal);
     el.textContent = metaLine(v) + (v && k === 'esri' ? ' (أحدث إصدار Esri)' : '');
-    S.nativeRes = v?.res ?? null; hint();
-  } catch (e) { if (e.name !== 'AbortError') { el.textContent = ''; S.nativeRes = null; hint(); } }
+    S.nativeRes = v?.res ?? null; S.nativeAcc = v?.acc ?? null; hint();
+  } catch (e) { if (e.name !== 'AbortError') { el.textContent = ''; S.nativeRes = null; S.nativeAcc = null; hint(); } }
 }
 const scheduleMeta = () => { clearTimeout(mt); mt = setTimeout(showMeta, 600); };
 map.on('moveend', scheduleMeta); map.once('idle', scheduleMeta);
@@ -492,48 +500,68 @@ async function findBest() {
 $('#bestbtn').onclick = findBest;
 if (!wb.some((x) => x.m)) $('#bestbtn').hidden = true;
 
-// ---------- صور مفتوحة (OpenAerialMap وVantor Open Data): تُعرض فقط إن كانت أدق من Esri أو بطلب المستخدم ----------
-async function stacSearch(q) {
-  const body = { collections: OPEN_COLLECTIONS, ...q };
-  let r;
-  try {
-    r = await fetch(`${OPEN_HOST}/stac/search`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(12000) });
-    if (!r.ok) throw new Error('post');
-  } catch {
-    r = await fetch(`${OPEN_HOST}/stac/search?${stacQuery(body)}`, { signal: AbortSignal.timeout(12000) });
-    if (!r.ok) throw new Error('get');
-  }
-  return ((await r.json()).features ?? []).map(parseOpenItem).filter(Boolean);
+// ---------- صور مفتوحة (OpenAerialMap): تُعرض فوق Esri بطلب المستخدم أو بتنبيه إن كانت أدق ----------
+async function oamSearch(bbox, limit = 100) {
+  const r = await fetch(oamMetaUrl(bbox, limit), { signal: AbortSignal.timeout(12000) });
+  if (!r.ok) throw new Error('oam');
+  return parseOamResponse(await r.json());
 }
-function useOpen(it) {
-  const key = 'oam:' + it.id, lat = it.bbox ? (it.bbox[1] + it.bbox[3]) / 2 : map.getCenter().lat;
-  const who = it.collection === 'vantor-opendata' ? 'Vantor Open Data' : 'OpenAerialMap/HOT';
-  oamSrc.set(key, { id: key, local: true, retina: true, maxZoom: it.gsd ? nativeZoom(it.gsd, lat) : 20, tileTemplate: openTileTemplate(it), bounds: it.bbox ?? undefined,
-    attribution: `${who} · ${it.license ?? 'CC BY 4.0'}${it.producer ? ' · ' + it.producer : ''}`, name: '🛩️ ' + it.title });
+// نختبر بلاطة حقيقية داخل تغطية الصورة قبل التبديل: إن منع الخادم الطلب (CORS) أو تعذّر الوصول نخبر المستخدم بدل شاشة فارغة
+async function probeOam(it) {
+  const c = it.bbox ? bboxCenter(it.bbox) : [map.getCenter().lng, map.getCenter().lat];
+  const z = Math.min(17, it.gsd ? nativeZoom(it.gsd, c[1]) : 17), t = tileOf(c[0], c[1], z);
+  try { const r = await fetch(it.tiles.replace('{z}', z).replace('{x}', t.x).replace('{y}', t.y), { mode: 'cors', signal: AbortSignal.timeout(10000) }); return r.ok ? 'ok' : 'http'; }
+  catch { return 'blocked'; }
+}
+async function useOpen(it) {
+  const key = 'oam:' + it.id, c0 = it.bbox ? bboxCenter(it.bbox) : [map.getCenter().lng, map.getCenter().lat];
+  toast('جارٍ تجهيز الصورة المفتوحة…');
+  if ((await probeOam(it)) === 'blocked') {
+    log('تعذّر الوصول إلى بلاطات هذه الصورة من الموقع (قد يمنعها خادمها أو الاتصال غير متاح). يمكنك فتحها في عارض OpenAerialMap الرسمي.');
+    $('#oam').replaceChildren(h('a', { href: oamViewerUrl(it), target: '_blank', rel: 'noopener noreferrer', class: 'phlink' }, `افتح «${bidi(it.title)}» في عارض OpenAerialMap ↗`));
+    return;
+  }
+  oamSrc.set(key, { id: key, local: true, maxZoom: it.gsd ? nativeZoom(it.gsd, c0[1]) : 20, tileTemplate: openTileTemplate(it), bounds: it.bbox ?? undefined,
+    attribution: `OpenAerialMap/HOT · ${it.license ?? 'CC BY 4.0'}${it.producer ? ' · ' + it.producer : ''}`, name: '🛩️ ' + it.title });
   for (const sel of ['#src', '#srcB']) if (![...$(sel).options].some((o) => o.value === key)) $(sel).append(opt(key, '🛩️ ' + it.title.slice(0, 60)));
   setSrc(key);
+  if (it.bbox) map.fitBounds([[it.bbox[0], it.bbox[1]], [it.bbox[2], it.bbox[3]]], { padding: 40, maxZoom: 19, essential: true });
 }
-const openRow = (it, ref) => {
-  const v = verdict(it.gsd, ref);
+const openRow = (it, ref, from) => {
+  const v = verdict(it.gsd, ref), km = from && it.bbox ? geodist(from, bboxCenter(it.bbox)) / 1000 : null;
   return h('button', { type: 'button', class: v === 'better' ? 'better' : '', onclick: () => useOpen(it) },
-    [VERDICT_LABEL[v], it.gsd ? fmtRes(it.gsd) : null, it.kind === 'uav' ? 'درون' : 'قمر', it.date ? isoDate(it.date) : null, bidi(it.title)].filter(Boolean).join(' · '));
+    [VERDICT_LABEL[v], it.gsd ? fmtRes(it.gsd) : null, it.kind === 'uav' ? 'درون' : 'قمر', it.date ? isoDate(it.date) : null, bidi(it.title), km != null ? `يبعد ${km < 10 ? km.toFixed(1) : Math.round(km)} كم` : null].filter(Boolean).join(' · '));
 };
 async function findOpen() {
   const box = $('#oam'), b = map.getBounds();
-  if (map.getZoom() + 1 < 9) { box.replaceChildren(h('div', { class: 'none' }, 'قرّب الخريطة إلى مدينة أو موقع محدد أولًا (مستوى تقريب 9 فأكثر).')); return; }
-  box.replaceChildren(h('div', { class: 'none' }, 'جارٍ البحث في OpenAerialMap وVantor…'));
+  if (map.getZoom() + 1 < 9) { box.replaceChildren(h('div', { class: 'none' }, 'قرّب الخريطة إلى مدينة أو موقع محدد أولًا (مستوى تقريب 9 فأكثر)، أو اضغط «كل مواقع الدرون في العراق».')); return; }
+  box.replaceChildren(h('div', { class: 'none' }, 'جارٍ البحث في OpenAerialMap…'));
   try {
-    const its = (await stacSearch({ bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((v) => +v.toFixed(5)), limit: 50 })).sort((x, y) => (x.gsd ?? 1e9) - (y.gsd ?? 1e9)).slice(0, 12);
+    const its = (await oamSearch([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()])).sort((x, y) => (x.gsd ?? 1e9) - (y.gsd ?? 1e9)).slice(0, 12);
     const ref = S.nativeRes;
     box.replaceChildren(...(its.length ? [h('div', { class: 'sum' }, ref ? `دقة Esri هنا ${fmtRes(ref)}. الأدق أولًا:` : 'الأدق أولًا:'), ...its.map((it) => openRow(it, ref))]
-      : [h('div', { class: 'none' }, 'لا توجد صور مفتوحة تغطي هذا العرض. قرّب إلى موقع محدد أو جرّب منطقة أخرى.')]));
+      : [h('div', { class: 'none' }, 'لا توجد صور مفتوحة تغطي هذا العرض. جرّب «كل مواقع الدرون في العراق» لترى أين تتوفر.')]));
+  } catch { box.replaceChildren(h('div', { class: 'none warn' }, 'تعذّر الوصول إلى فهرس الصور المفتوحة الآن.')); }
+}
+let iraqOpen = null;
+async function listIraqOpen() {
+  const box = $('#oam');
+  box.replaceChildren(h('div', { class: 'none' }, 'جارٍ جلب مواقع الدرون المسجّلة في العراق…'));
+  try {
+    iraqOpen ??= (await oamSearch(IRAQ_BBOX)).filter((x) => x.bbox);
+    const c = map.getCenter(), from = [c.lng, c.lat], ref = S.nativeRes;
+    const its = [...iraqOpen].sort((x, y) => geodist(from, bboxCenter(x.bbox)) - geodist(from, bboxCenter(y.bbox)));
+    const best = Math.min(...its.map((x) => x.gsd ?? 1e9));
+    box.replaceChildren(...(its.length ? [h('div', { class: 'sum' }, `${its.length} صورة مفتوحة مسجّلة في العراق${best < 1e9 ? `، أدقها ${fmtRes(best)}` : ''}. الأقرب إلى مركز الخريطة أولًا (تغطي كل صورة موقعًا صغيرًا، وغالبًا مواقع أثرية):`), ...its.slice(0, 25).map((it) => openRow(it, ref, from))]
+      : [h('div', { class: 'none' }, 'لا توجد صور مفتوحة مسجّلة في العراق حاليًا.')]));
   } catch { box.replaceChildren(h('div', { class: 'none warn' }, 'تعذّر الوصول إلى فهرس الصور المفتوحة الآن.')); }
 }
 $('#oambtn').onclick = findOpen;
+$('#oamall').onclick = listIraqOpen;
 
 // تنبيه عند وجود صورة أدق من Esri في مركز الخريطة، بزر «اعرضها» (لا يغيّر المصدر الافتراضي Esri من تلقاء نفسه):
 //  1) مصدر محلي في config/extra-imagery.json مُعلَّم "preferred": true (بلا أي طلب شبكي)
-//  2) صور OpenAerialMap/Vantor إن فعّل المستخدم «التنبيه» (استعلام بنقطة المركز فقط)
+//  2) صور OpenAerialMap إن فعّل المستخدم «التنبيه» (استعلام بنقطة المركز فقط)
 const chip = $('#oamchip'), autoSeen = new Map();
 let autoT, autoLast = 0, autoSkip = 0, chipGo = null;
 const hideChip = () => { chip.hidden = true; chipGo = null; };
@@ -551,7 +579,7 @@ async function autoOpen() {
   if (!items) {
     if (Date.now() - autoLast < 6000) return;
     autoLast = Date.now();
-    try { items = await stacSearch({ intersects: { type: 'Point', coordinates: [+c.lng.toFixed(4), +c.lat.toFixed(4)] }, limit: 20 }); autoSeen.set(key, items); }
+    try { const e = 1e-4; items = await oamSearch([c.lng - e, c.lat - e, c.lng + e, c.lat + e], 20); autoSeen.set(key, items); }
     catch { autoSkip = Date.now() + 60000; return; }
   }
   const best = items.filter((it) => verdict(it.gsd, S.nativeRes) === 'better' && 'oam:' + it.id !== S.layer).sort((x, y) => x.gsd - y.gsd)[0];
@@ -566,40 +594,87 @@ $('#oamgo').onclick = () => { const g = chipGo; hideChip(); g?.(); };
 $('#oamx').onclick = hideChip;
 map.on('moveend', scheduleAuto);
 
-// ---------- أدوات: تضاريس 3D وقياس وحفظ صورة وتحسين الوضوح ----------
+// ---------- أدوات: 3D (تضاريس + مبانٍ) وقياس جيوديسي وحفظ صورة وتحسين الوضوح ----------
+// مصدران للارتفاعات (ترميز Terrarium): AWS Open Data ثم Mapterhorn احتياطًا إن فشل الأول (حجب/CORS).
+const DEMS = [
+  { tiles: ['https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png'], tileSize: 256, maxzoom: 15, attribution: 'Terrain: Mapzen/AWS Open Data' },
+  { tiles: ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'], tileSize: 512, maxzoom: 14, attribution: 'Terrain: Mapterhorn' },
+];
+let demIx = 0;
+const exag = () => +$('#exag').value || 1.3;
+function addDem(i) {
+  if (map.getSource('dem')) { map.setTerrain(null); map.removeSource('dem'); }
+  map.addSource('dem', { type: 'raster-dem', encoding: 'terrarium', ...DEMS[i] });
+}
+function demFailed() {
+  if (!t3 || demIx >= DEMS.length - 1) return false;
+  demIx++; addDem(demIx); map.setTerrain({ source: 'dem', exaggeration: exag() });
+  toast('تعذّر مصدر الارتفاعات الأول؛ جرّبنا مصدرًا احتياطيًا.');
+  return true;
+}
+const applyB3D = () => map.getLayer('bld3d') && map.setLayoutProperty('bld3d', 'visibility', t3 && $('#b3d').checked ? 'visible' : 'none');
+const SKY = { 'sky-color': '#7db6ff', 'horizon-color': '#dbeafe', 'fog-color': '#e8f1ff', 'sky-horizon-blend': 0.5, 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.2 };
 function set3D(on) {
   if (on && map2) cmpOff();
-  t3 = on; $('#t3d').setAttribute('aria-pressed', String(on));
-  if (on && !map.getSource('dem')) map.addSource('dem', { type: 'raster-dem', tiles: ['https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png'], encoding: 'terrarium', tileSize: 256, maxzoom: 15, attribution: 'Terrain: Mapzen/AWS Open Data' });
-  map.setTerrain(on ? { source: 'dem', exaggeration: 1.5 } : null);
+  t3 = on; $('#t3d').setAttribute('aria-pressed', String(on)); $('#d3opts').hidden = !on;
+  if (on) { if (!map.getSource('dem')) addDem(demIx); map.setTerrain({ source: 'dem', exaggeration: exag() }); try { map.setSky(SKY); } catch { /* نسخة بلا سماء */ } }
+  else map.setTerrain(null);
+  applyB3D();
   on ? map.dragRotate.enable() : map.dragRotate.disable();
   map.easeTo({ pitch: on ? 60 : 0, bearing: on ? map.getBearing() : 0, duration: 800 });
+  if (on && map.getZoom() + 1 < 15) toast('قرّب إلى مستوى الأحياء (15 فأكثر) لتظهر المباني ثلاثية الأبعاد.');
 }
 $('#t3d').onclick = () => set3D(!t3);
+$('#b3d').onchange = applyB3D;
+$('#exag').oninput = () => { $('#exagv').textContent = exag().toFixed(1) + '×'; if (t3 && map.getSource('dem')) map.setTerrain({ source: 'dem', exaggeration: exag() }); };
 
-let mp = [];
+// قياس: خطوط جيوديسية على WGS84 (shared/measure.js). الإحداثيات من نقرة المستخدم، والدقة العملية يحددها حجم البكسل ودقة الصورة.
+let mp = [], mArea = false, mCur = null, mRaf = 0;
+function ensureMeas() {
+  if (map.getSource('meas')) return;
+  map.addSource('meas', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  const f = (t) => ['==', ['get', 'k'], t];
+  map.addLayer({ id: 'meas-fill', type: 'fill', source: 'meas', filter: f('poly'), paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.25 } });
+  map.addLayer({ id: 'meas-line', type: 'line', source: 'meas', filter: f('line'), paint: { 'line-color': '#ffd166', 'line-width': 3 } });
+  map.addLayer({ id: 'meas-prev', type: 'line', source: 'meas', filter: f('prev'), paint: { 'line-color': '#ffd166', 'line-width': 2, 'line-dasharray': [2, 2], 'line-opacity': 0.9 } });
+  map.addLayer({ id: 'meas-pt', type: 'circle', source: 'meas', filter: f('pt'), paint: { 'circle-radius': 5, 'circle-color': '#fff', 'circle-stroke-color': '#ef4444', 'circle-stroke-width': 2 } });
+  map.addLayer({ id: 'meas-lbl', type: 'symbol', source: 'meas', filter: f('lbl'), layout: { 'text-field': ['get', 't'], 'text-font': ['Noto Sans Regular'], 'text-size': 12, 'text-allow-overlap': true, 'text-offset': [0, -0.9] }, paint: { 'text-color': '#fff', 'text-halo-color': 'rgba(0,0,0,.85)', 'text-halo-width': 1.6 } });
+}
+const measText = (pts) => (mArea
+  ? (pts.length < 3 ? 'انقر ثلاث نقاط على الأقل لحساب المساحة' : `المساحة: ${fmtArea(polygonArea(pts))} · المحيط: ${fmtLen(pathLength(pts, true))}`)
+  : (pts.length < 2 ? 'انقر على الخريطة لإضافة نقاط القياس' : `المسافة: ${fmtLen(pathLength(pts))}${pts.length > 2 ? ` · ${pts.length - 1} مقاطع` : ''}`));
 function drawMeas() {
-  if (!map.getSource('meas')) {
-    map.addSource('meas', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-    map.addLayer({ id: 'meas-fill', type: 'fill', source: 'meas', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#38bdf8', 'fill-opacity': 0.25 } });
-    map.addLayer({ id: 'meas-line', type: 'line', source: 'meas', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#ffd166', 'line-width': 3 } });
-    map.addLayer({ id: 'meas-pt', type: 'circle', source: 'meas', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 5, 'circle-color': '#fff', 'circle-stroke-color': '#ef4444', 'circle-stroke-width': 2 } });
-  }
-  const f = mp.map((c) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: {} }));
-  if (mp.length > 1) f.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: mp.length > 2 ? [...mp, mp[0]] : mp }, properties: {} });
-  if (mp.length > 2) f.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[...mp, mp[0]]] }, properties: {} });
-  map.getSource('meas').setData({ type: 'FeatureCollection', features: f });
-  $('#mres span').textContent = mp.length < 2 ? 'انقر على الخريطة لإضافة نقاط' : `${mp.length > 2 ? 'المحيط' : 'المسافة'}: ${fmtLen(pathLength(mp, mp.length > 2))}${mp.length > 2 ? ` · المساحة: ${fmtArea(polygonArea(mp))}` : ''}`;
+  ensureMeas();
+  const pts = mCur && mp.length ? [...mp, mCur] : mp, feats = [];
+  const seg = (a, b, k) => { feats.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [a, b] }, properties: { k } }); feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: midpoint(a, b) }, properties: { k: 'lbl', t: fmtLen(geodist(a, b)) } }); };
+  mp.forEach((c) => feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: c }, properties: { k: 'pt' } }));
+  for (let i = 1; i < mp.length; i++) seg(mp[i - 1], mp[i], 'line');
+  if (mArea && mp.length > 2) seg(mp[mp.length - 1], mp[0], 'line');
+  if (mCur && mp.length) { seg(mp[mp.length - 1], mCur, 'prev'); if (mArea && mp.length > 1) feats.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: [mCur, mp[0]] }, properties: { k: 'prev' } }); }
+  if (mArea && pts.length > 2) feats.push({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [[...pts, pts[0]]] }, properties: { k: 'poly' } });
+  map.getSource('meas').setData({ type: 'FeatureCollection', features: feats });
+  $('#mval').textContent = measText(mp);
+  $('#mnote').textContent = precisionNote(mpp(), S.nativeAcc) + (t3 ? ' المسافات أفقية (لا تحسب انحدار التضاريس).' : '');
+  $('#mmode').setAttribute('aria-pressed', String(mArea)); $('#mmode').textContent = mArea ? '↔ مسافة' : '▱ مساحة';
 }
 function setMeas(on) {
-  mOn = on; mp = [];
+  mOn = on; mp = []; mCur = null; mArea = false;
   $('#meas').setAttribute('aria-pressed', String(on)); $('#mres').hidden = !on; map.getCanvas().style.cursor = on ? 'crosshair' : '';
+  on ? map.doubleClickZoom.disable() : map.doubleClickZoom.enable();
   if (on || map.getSource('meas')) drawMeas();
   if (on && mobile()) sheet(false);
 }
 $('#meas').onclick = () => setMeas(!mOn);
-$('#mclr').onclick = () => { mp = []; drawMeas(); };
+$('#mend').onclick = () => setMeas(false);
+$('#mclr').onclick = () => { mp = []; mCur = null; drawMeas(); };
+const measUndo = () => { mp.pop(); mCur = null; drawMeas(); };
+$('#mundo').onclick = measUndo;
+$('#mmode').onclick = () => { mArea = !mArea; drawMeas(); };
+$('#mcopy').onclick = async () => { try { await navigator.clipboard.writeText($('#mval').textContent); toast('تم نسخ النتيجة'); } catch { toast('تعذّر النسخ من هذا المتصفح'); } };
 map.on('click', (e) => { if (!mOn) return; mp.push([e.lngLat.lng, e.lngLat.lat]); drawMeas(); });
+map.on('mousemove', (e) => { if (!mOn || !mp.length) return; mCur = [e.lngLat.lng, e.lngLat.lat]; if (!mRaf) mRaf = requestAnimationFrame(() => { mRaf = 0; if (mOn) drawMeas(); }); });
+addEventListener('keydown', (e) => { if (!mOn || e.target.closest?.('input,textarea,select')) return; if (e.key === 'Backspace' || e.key === 'Delete' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z')) { e.preventDefault(); measUndo(); } });
+map.on('zoomend', () => { if (mOn) drawMeas(); });
 
 $('#enh').onchange = (e) => {
   S.enh = e.target.checked;
@@ -621,6 +696,9 @@ $('#shot').onclick = () => {
   map.triggerRepaint();
 };
 
+// أقسام الشريط الجانبي: نتذكر المطوي والمفتوح
+document.querySelectorAll('details.sec').forEach((d) => { const k = 'sec:' + d.id, v = lsGet(k); if (v != null) d.open = v === '1'; d.addEventListener('toggle', () => lsSet(k, d.open ? '1' : '0')); });
+const photos = initPhotos({ map, maplibregl, h, $, toast, cfg });
 info();
 refreshUI();
 if (import.meta.env.PROD && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

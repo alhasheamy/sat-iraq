@@ -75,42 +75,76 @@ export function bestSummary(top, cur) {
 }
 
 // ---------------------------------------------------------------------------
-// 2) صور مفتوحة (OpenAerialMap وVantor Open Data) عبر فهرس STAC الخاص بـHOT
-export const OPEN_HOST = 'https://api.imagery.hotosm.org';
-export const OPEN_COLLECTIONS = ['openaerialmap', 'vantor-opendata'];
+// 2) صور مفتوحة: فهرس OpenAerialMap (HOT). تُعرض صور الدرون والأقمار المجتمعية (CC BY 4.0) فوق Esri.
+// تحقّقنا حيًّا (18–20 أكتوبر 2026) أن الاستعلام بصندوق العراق يعيد 63 صورة درون بدقة 1–2 سم لمواقع أثرية،
+// وأن لكل صورة property اسمها tms بصيغة https://tiles.openaerialmap.org/<id>/0/<id>/{z}/{x}/{y} (XYZ).
+// (واجهة STAC الجديدة api.imagery.hotosm.org لا توثّق مسار بلاطات، فأُزيلت من الكود.)
+export const OAM_API = 'https://api.openaerialmap.org';
+export const OAM_TILES_HOST = 'tiles.openaerialmap.org';
+export const IRAQ_BBOX = [38.8, 29, 48.6, 37.4];
 
 const clean = (s, n = 90) => (typeof s === 'string' ? s.replace(/[\u0000-\u001F<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n) : '');
 const bboxOf = (b) => (Array.isArray(b) && b.length === 4 && b.every((v) => typeof v === 'number' && Number.isFinite(v)) ? b : null);
 
-/** يحوّل عنصر STAC إلى كائن صغير آمن. يرفض أي عنصر خارج المجموعتين أو بمعرّف غير آمن للمسار. */
-export function parseOpenItem(f) {
-  if (!f || typeof f.id !== 'string' || !/^[\w.-]{1,80}$/.test(f.id) || !OPEN_COLLECTIONS.includes(f.collection)) return null;
-  const p = f.properties ?? {};
+/** رابط استعلام الفهرس بصندوق [غرب, جنوب, شرق, شمال]. */
+export function oamMetaUrl(bbox, limit = 100, page = 1) {
+  const q = new URLSearchParams({ bbox: bbox.map((v) => +(+v).toFixed(5)).join(','), limit: String(Math.min(100, Math.max(1, limit))), page: String(Math.max(1, page)) });
+  return `${OAM_API}/meta?${q}`;
+}
+
+/** قالب بلاطات مقبول فقط من نطاق OAM وبصيغة https وبالمتغيرات الثلاثة. */
+export function validOamTiles(t) {
+  if (typeof t !== 'string' || /[\s"'<>]/.test(t)) return null;
+  try {
+    const u = new URL(t.replace('{z}', '0').replace('{x}', '0').replace('{y}', '0'));
+    if (u.protocol !== 'https:' || u.hostname !== OAM_TILES_HOST) return null;
+  } catch { return null; }
+  return ['{z}', '{x}', '{y}'].every((k) => t.includes(k)) ? t : null;
+}
+
+/** عنصر من نتائج /meta ← كائن صغير آمن، أو null إن لم يكن صالحًا. */
+export function parseOamResult(r, metaLicense = null) {
+  if (!r || typeof r !== 'object') return null;
+  const tiles = validOamTiles(r.properties?.tms ?? r.tms);
+  if (!tiles) return null;
+  const fromPath = /^https:\/\/tiles\.openaerialmap\.org\/[\w]+\/\d+\/([\w]+)\/\{z\}/.exec(tiles)?.[1];
+  const id = typeof fromPath === 'string' ? fromPath : typeof r._id === 'string' ? r._id : null;
+  if (!id || !/^[\w.-]{1,80}$/.test(id)) return null;
+  const d = r.acquisition_end ?? r.acquisition_start;
   return {
-    id: f.id,
-    collection: f.collection,
-    title: clean(p.title) || f.id,
-    gsd: pos(p.gsd),
-    date: typeof p.datetime === 'string' && /^\d{4}-\d{2}-\d{2}/.test(p.datetime) ? p.datetime.slice(0, 10) : null,
-    license: clean(p.license, 24) || null,
-    kind: p['oam:platform_type'] === 'uav' ? 'uav' : 'satellite',
-    producer: clean(p['oam:producer_name'] ?? p.providers?.[0]?.name, 60) || null,
-    bbox: bboxOf(f.bbox),
+    id,
+    collection: 'openaerialmap',
+    title: clean(r.title) || id,
+    gsd: pos(r.gsd),
+    date: typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : null,
+    license: clean(r.license ?? metaLicense, 24) || 'CC-BY 4.0',
+    kind: /uav|drone/i.test(String(r.platform ?? '')) ? 'uav' : 'satellite',
+    producer: clean(r.provider, 60) || null,
+    bbox: bboxOf(r.bbox),
+    tiles,
   };
 }
 
-/** نفس استعلام STAC بصيغة GET (احتياط إن رفض المتصفح طلب POST). */
-export function stacQuery(body) {
-  const q = new URLSearchParams();
-  if (body.collections) q.set('collections', body.collections.join(','));
-  if (body.bbox) q.set('bbox', body.bbox.join(','));
-  if (body.intersects) q.set('intersects', JSON.stringify(body.intersects));
-  q.set('limit', String(body.limit ?? 20));
-  return q.toString();
+/** استجابة /meta كاملة ← قائمة عناصر صالحة. */
+export function parseOamResponse(json) {
+  const lic = clean(json?.meta?.license, 24) || null;
+  return (Array.isArray(json?.results) ? json.results : []).map((r) => parseOamResult(r, lic)).filter(Boolean);
 }
 
-/** قالب بلاطات TiTiler لعنصر STAC (نفس نقطة النهاية التي يستعملها متصفح OAM). */
-export const openTileTemplate = (it) => `${OPEN_HOST}/raster/collections/${it.collection}/items/${it.id}/tiles/WebMercatorQuad/{z}/{x}/{y}@1x?assets=visual`;
+/** مركز صندوق [غرب, جنوب, شرق, شمال]. */
+export const bboxCenter = (b) => [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
+
+/** قالب بلاطات صورة OAM (جاهز من الفهرس). */
+export const openTileTemplate = (it) => it.tiles;
+
+/** رابط فتح الصورة في عارض OAM الرسمي (احتياط إن منع الخادم عرض بلاطاتها داخل موقعنا). */
+export const oamViewerUrl = (it) => { const c = it.bbox ? bboxCenter(it.bbox) : [0, 0]; return `https://map.openaerialmap.org/#/${c[0].toFixed(5)},${c[1].toFixed(5)},18`; };
+
+/** بلاطة XYZ تحتوي نقطة (لفحص CORS ببلاطة حقيقية داخل تغطية الصورة). */
+export function tileOf(lon, lat, z) {
+  const n = 2 ** z, rad = (lat * Math.PI) / 180;
+  return { x: Math.floor(((lon + 180) / 360) * n), y: Math.floor(((1 - Math.asinh(Math.tan(rad)) / Math.PI) / 2) * n) };
+}
 
 /** أعلى مستوى تقريب تفيد عنده الصورة الأصلية (ما بعده تكبير رقمي) بحسب حجم البكسل بالمتر وخط العرض. */
 export const nativeZoom = (gsd, lat) => Math.min(23, Math.max(10, Math.ceil(Math.log2((156543.03392 * Math.cos((lat * Math.PI) / 180)) / gsd))));
