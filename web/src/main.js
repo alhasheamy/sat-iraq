@@ -8,6 +8,8 @@ import { buildPlaceIndex, findPlaceInText, normalizeArabic } from '../../shared/
 import { metaQueryUrl, parseMeta, rankBest, metaLine, digitalZoom, bestSummary, parseOamResponse, oamMetaUrl, oamViewerUrl, tileOf, bboxCenter, IRAQ_BBOX, openTileTemplate, nativeZoom, verdict, VERDICT_LABEL, fmtRes, isoDate, bidi } from '../../shared/imagery.js';
 import { pathLength, polygonArea, fmtLen, fmtArea, geodist, midpoint, precisionNote } from '../../shared/measure.js';
 import { initPhotos } from './photos.js';
+import { registerOverzoom } from './overzoom.js';
+registerOverzoom(maplibregl);
 
 const $ = (s) => document.querySelector(s);
 const h = (t, a = {}, ...k) => {
@@ -137,9 +139,9 @@ map.on('zoom', () => document.body.classList.toggle('far', map.getZoom() < 6.5))
 }
 
 // ---------- الواجهة ----------
-const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-const CLAR = 'https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-const WBU = (n) => `https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/${n}/{z}/{y}/{x}`;
+const ESRI = 'esri://https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const CLAR = 'esri://https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const WBU = (n) => `esri://https://wayback.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/WMTS/1.0.0/default028mm/MapServer/tile/${n}/{z}/{y}/{x}`;
 const srcDef = (k) => {
   if (k === 'esri') return { id: 'esri', maxZoom: 19, sharp: true, tileTemplate: ESRI, name: 'Esri World Imagery', attribution: ESRI_ATTR };
   if (k === 'clarity') return { id: 'clarity', maxZoom: 19, sharp: true, tileTemplate: CLAR, name: 'Esri Clarity', attribution: ESRI_ATTR };

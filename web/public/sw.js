@@ -1,5 +1,5 @@
 // v3 (إزالة صور غير Esri وإضافة قوائم الدقة): نفس السياسات، data/*.json وrtl.js = stale-while-revalidate، /assets/* = كاش أولًا (ملفات مُبصَمة)، التنقّل = الشبكة أولًا مع نسخة احتياطية دون اتصال
-const DATA = 'data-v4', SHELL = 'shell-v4';
+const DATA = 'data-v5', SHELL = 'shell-v5';
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png']).catch(() => {}))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => ![DATA, SHELL].includes(k)).map((k) => caches.delete(k)))).then(() => self.clients.claim())));
 const swr = (e, name) => e.respondWith(caches.open(name).then(async (c) => {

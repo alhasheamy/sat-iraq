@@ -151,3 +151,10 @@ test('الحكم: هل الصورة المفتوحة أدق من Esri فعلًا
   assert.equal(verdict(0.5, null), 'unknown');   // لا ندّعي التفوق دون دليل
   assert.equal(verdict(null, 0.3), 'unknown');
 });
+
+import { tileCoordsOf } from '../shared/overzoom.js';
+test('استخراج إحداثيات البلاطة من رابط Esri وWayback', () => {
+  assert.deepEqual(tileCoordsOf('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/17/52345/78901'), { z: 17, y: 52345, x: 78901 });
+  assert.deepEqual(tileCoordsOf('https://wayback.maptiles.arcgis.com/x/MapServer/tile/1234/5/6/7?a=1'), { z: 5, y: 6, x: 7 });
+  assert.equal(tileCoordsOf('https://x/y'), null);
+});
